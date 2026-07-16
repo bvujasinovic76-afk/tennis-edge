@@ -7,7 +7,7 @@ import PlayerCombobox from "./PlayerCombobox";
 type Citation = { url: string; title: string };
 type AgentResult = { id: string; name: string; model: string; content: string; citations: Citation[]; error?: string };
 type Synth = { headline: string; signals: string[]; risk: "low" | "medium" | "high"; recommendation: string; error?: string };
-type ResearchResponse = { playerA: string; playerB: string; agents: AgentResult[]; synth: Synth };
+type ResearchResponse = { playerA: string; playerB: string; agents: AgentResult[]; synth: Synth; cached?: boolean; cachedAt?: string };
 
 const RISK_LABEL: Record<Synth["risk"], string> = { low: "nizak rizik", medium: "srednji rizik", high: "visok rizik" };
 const RISK_TONE: Record<Synth["risk"], string> = { low: "bg-good-bg text-good", medium: "bg-surface-alt text-ink-soft", high: "bg-risk-bg text-risk" };
@@ -91,6 +91,11 @@ export default function Research({
 
       {result && (
         <div className="mt-6 border-t border-line pt-5 space-y-5">
+          {result.cached && (
+            <p className="text-xs rounded-md bg-good-bg text-good px-3 py-2 inline-block">
+              📁 Iz arhive ({result.cachedAt ? new Date(result.cachedAt).toLocaleString("sr-RS", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "ranije"}) — bez novih web pretraga i kredita.
+            </p>
+          )}
           {!result.synth.error && (
             <div className="rounded-r-lg border-l-[3px] border-accent bg-paper px-5 py-4">
               <div className="flex flex-wrap items-center gap-2 mb-2">

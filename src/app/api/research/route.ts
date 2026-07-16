@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { callModelWeb, callModelJson, OpenRouterError, type Citation } from "@/lib/openrouter";
 import { RESEARCH_AGENTS, RESEARCH_SYNTH_MODEL, RESEARCH_SYNTH_SYSTEM, type ResearchAgentId } from "@/lib/researchAgents";
+import { findCached, saveAnalysis } from "@/lib/analysesCache";
+import { createClient } from "@/lib/supabase/server";
 
 export type ResearchAgentResult = {
   id: ResearchAgentId;
@@ -30,6 +32,12 @@ export async function POST(req: NextRequest) {
   if (!playerA || !playerB) return NextResponse.json({ error: "Nedostaju imena igrača." }, { status: 400 });
   if (!process.env.OPENROUTER_API_KEY) {
     return NextResponse.json({ error: "OPENROUTER_API_KEY nije podešen na serveru." }, { status: 503 });
+  }
+
+  // Keš: istraživanje za isti par u poslednjih 24h — vrati iz arhive (0 kredita, 0 web pretraga).
+  const cached = await findCached("research", playerA, playerB, surface);
+  if (cached) {
+    return NextResponse.json({ ...(cached.payload as object), cached: true, cachedAt: cached.createdAt });
   }
 
   const agents: ResearchAgentResult[] = await Promise.all(
@@ -78,5 +86,14 @@ export async function POST(req: NextRequest) {
     };
   }
 
-  return NextResponse.json({ playerA, playerB, agents, synth });
+  const response = { playerA, playerB, surface, agents, synth };
+
+  // Sačuvaj u arhivu samo ako je bar jedan agent uspeo i sinteza prošla.
+  if (!synth.error && usable.length > 0) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    await saveAnalysis("research", playerA, playerB, surface, response, user?.id ?? null).catch(() => {});
+  }
+
+  return NextResponse.json(response);
 }

@@ -16,12 +16,19 @@ i tenisu) — ovo je prvi konkretan, radni MVP, fokusiran samo na tenis.
 - **Walk-forward backtest** poredi model protiv Pinnacle zatvarajućih kvota
   (najoštrije tržište) na periodu jun 2025 – jul 2026, i meri realnu tačnost,
   log-loss i ROI da bi model imao dokaz pre nego što bilo šta naplati.
-- **Nadolazeći ATP mečevi** (`/api/fixtures`) — uživo i sledeći mečevi se
-  automatski učitavaju sa Sofascore-a (javni feed), bez ručnog unosa. Za live
-  mečeve prikazuje trenutni rezultat (setovi + gem poen); za oba tipa unakrsno
-  poredi sofascore igrače sa našom Elo bazom (po imenu) i, kad ih prepozna,
-  odmah pokazuje Elo model % i dugme "Analiziraj" koje šalje par u kalkulator i
-  AI konzilijum.
+- **Nadolazeći ATP mečevi** (`/api/fixtures`) — pametan izvor: Sofascore prvi
+  (bogatiji — ATP rang + kvote; radi lokalno preko curl-a), **ESPN javni scoreboard
+  kao fallback koji radi i na Vercelu** (bez ključa, native fetch). Live rezultati,
+  sledeći mečevi, unakrsno mapiranje na našu Elo bazu, dugme "Analiziraj".
+- **Auto-obeležavanje tiketa** (`/api/autosettle`) — dugme "Proveri rezultate" u
+  bankroll panelu: povuče završene mečeve (ESPN), upari ih sa tvojim tiketima
+  "u toku" (radi i sa obrnutim redosledom igrača i sufiksom strategije) i sam
+  obeleži dobitak/gubitak.
+- **Arhiva analiza + keš** (`/api/analyses`, tabela `analyses`) — svaka uspešna
+  AI analiza (konzilijum/istraživanje) se čuva u Supabase; ako za isti par i
+  podlogu postoji analiza mlađa od 24h, vraća se iz arhive **bez trošenja
+  kredita** (radi i za obrnut redosled igrača). Prijavljen korisnik vidi svoju
+  istoriju u sekciji "Arhiva analiza".
 - **Analiza meča — pregled za ljude** (`src/lib/narrative.ts`, 0 API kredita):
   za izabrani par generiše analizu na srpskom koja se čita kao ljudski analitičar —
   ko je favorit i zašto, forma, kome leži podloga, rang, i (uz kvote) gde je value —
@@ -91,8 +98,13 @@ praćenje i simulaciju/učenje na malim iznosima**, ne kao dokazano profitabilne
 savete. Istraživanje uživo (povrede/kvote/forumi) je tu upravo da uhvati ono što
 goli Elo model ne vidi, pre nego što odigraš. 18+, klađenje je odgovornost korisnika.
 
-Sledeći korak (faza 2): dodati formu poslednjih 5–10 mečeva, umor (dani od
-prethodnog meča), head-to-head istoriju — pa ponovo backtestovati.
+**Faza 2 — urađeno i pošteno izvešteno**: model v2 (Elo + forma + H2H + dani odmora,
+logistička regresija sa zamrznutim Elo koeficijentom, treniran pre 2025-06 i testiran
+walk-forward posle) je **GORI od čistog Elo-a**: ROI ≈ −17% vs −11%, tačnost 62.8% vs
+64.3%, lošiji log-loss. Elo već upija formu kroz svakodnevno ažuriranje — forma/H2H ne
+donose nov signal. Aplikacija zato i dalje koristi v1, a v2 eksperiment je prikazan u
+track record sekciji (`eloV2` u JSON-u). Praktična pouka: "forma i H2H" koje tipsteri
+prodaju kao edge — nisu edge.
 
 ## Pokretanje
 

@@ -5,10 +5,28 @@ import { useBankroll, formatMoney } from "./BankrollContext";
 import { betPnl, type Bet } from "@/lib/bankroll";
 
 export default function BankrollPanel() {
-  const { state, stats, loading, authed, setBankroll, settleBet, deleteBet, reset } = useBankroll();
+  const { state, stats, loading, authed, setBankroll, settleBet, deleteBet, reset, refresh } = useBankroll();
   const [editing, setEditing] = useState(false);
   const [amount, setAmount] = useState("");
   const [mult, setMult] = useState("0.25");
+  const [checking, setChecking] = useState(false);
+  const [checkMsg, setCheckMsg] = useState("");
+
+  async function checkResults() {
+    setChecking(true);
+    setCheckMsg("");
+    try {
+      const res = await fetch("/api/autosettle", { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+      setCheckMsg(json.message ?? "Provereno.");
+      if (json.settled?.length) await refresh();
+    } catch (e) {
+      setCheckMsg(e instanceof Error ? e.message : "Greška pri proveri.");
+    } finally {
+      setChecking(false);
+    }
+  }
 
   if (loading && !state) return <p className="text-sm text-muted">Učitavanje bankrolla…</p>;
   if (!authed) {
@@ -40,7 +58,16 @@ export default function BankrollPanel() {
             {formatMoney(stats.availableBankroll, stats.currency)}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2 items-center">
+          {stats.pendingBets > 0 && (
+            <button
+              onClick={checkResults}
+              disabled={checking}
+              className="text-xs rounded-md bg-accent text-accent-contrast font-semibold px-3 py-1.5 disabled:opacity-50 hover:brightness-95 transition"
+            >
+              {checking ? "Proveravam…" : "Proveri rezultate"}
+            </button>
+          )}
           <button
             onClick={() => {
               setEditing((v) => !v);
@@ -53,6 +80,7 @@ export default function BankrollPanel() {
           </button>
         </div>
       </div>
+      {checkMsg && <p className="mb-4 -mt-2 text-xs text-ink-soft">{checkMsg}</p>}
 
       {editing && (
         <div className="mb-5 rounded-lg bg-surface-alt/60 p-4 grid gap-3 sm:grid-cols-[1fr_1fr_auto] items-end">

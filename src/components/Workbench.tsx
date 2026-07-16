@@ -12,6 +12,7 @@ import Strategies from "./Strategies";
 import Calculator from "./Calculator";
 import Research from "./Research";
 import AiCouncil from "./AiCouncil";
+import ArchiveList from "./ArchiveList";
 
 export default function Workbench({ players }: { players: Player[] }) {
   const [pick, setPick] = useState<{ a: string; b: string; surface: Surface } | null>(null);
@@ -98,6 +99,15 @@ export default function Workbench({ players }: { players: Player[] }) {
           rezonovanje naspram Elo brojeva, glavni analitičar sklapa finalni plan igre sa Kelly ulogom.
         </p>
         <AiCouncil key={`council-${pickKey}`} players={players} initialA={pick?.a} initialB={pick?.b} initialSurface={pick?.surface} />
+      </section>
+
+      <section className="py-10 border-b border-line">
+        <SectionHead num="10" title="Arhiva analiza" />
+        <p className="text-ink-soft max-w-[68ch] mb-5">
+          Svaka AI analiza (konzilijum i istraživanje) se automatski čuva — imaš istoriju, a ako neko za isti meč
+          već ima svežu analizu (24h), dobijaš je iz arhive bez trošenja kredita.
+        </p>
+        <ArchiveList />
       </section>
     </BankrollProvider>
   );

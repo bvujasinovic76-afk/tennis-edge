@@ -3,6 +3,8 @@ import { players } from "@/lib/ratings";
 import { blendedRating, devig, expectedProb } from "@/lib/elo";
 import { PERSONAS, JUDGE_MODEL, JUDGE_SYSTEM_PROMPT, SYNTHESIZER_MODEL, SYNTHESIZER_SYSTEM_PROMPT } from "@/lib/personas";
 import { callModelJson, OpenRouterError } from "@/lib/openrouter";
+import { findCached, saveAnalysis } from "@/lib/analysesCache";
+import { createClient } from "@/lib/supabase/server";
 import type { PredictRequest, PredictResponse, PersonaResult, JudgeResult, FinalVerdict } from "@/lib/predictTypes";
 
 export async function POST(req: NextRequest) {
@@ -24,6 +26,12 @@ export async function POST(req: NextRequest) {
       { error: "OPENROUTER_API_KEY nije podešen na serveru. Dodaj ga u .env.local i restartuj dev server." },
       { status: 503 }
     );
+  }
+
+  // Keš: ako je isti meč analiziran u poslednjih 24h, vrati arhiviranu analizu (0 kredita).
+  const cached = await findCached("council", playerA.name, playerB.name, surface);
+  if (cached) {
+    return NextResponse.json({ ...(cached.payload as PredictResponse), cached: true, cachedAt: cached.createdAt });
   }
 
   const ra = blendedRating(playerA, surface);
@@ -112,6 +120,14 @@ VAŽNO — realan track record ovog Elo modela: u walk-forward backtestu protiv 
     }
 
     const response: PredictResponse = { playerA: playerA.name, playerB: playerB.name, personas: personaResults, judge, final };
+
+    // Sačuvaj u arhivu (samo uspešne — bar jedan analitičar + finale bez greške).
+    if (!final.error && personaResults.some((p) => !p.error)) {
+      const supabase = await createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      await saveAnalysis("council", playerA.name, playerB.name, surface, response, user?.id ?? null).catch(() => {});
+    }
+
     return NextResponse.json(response);
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "Nepoznata greška." }, { status: 500 });

@@ -61,3 +61,20 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
+
+-- Arhiva AI analiza (konzilijum + istraživanje) — keš da se isti meč ne plaća dvaput.
+create table if not exists public.analyses (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users (id) on delete set null,
+  kind text not null check (kind in ('council','research')),
+  player_a text not null,
+  player_b text not null,
+  surface text not null,
+  payload jsonb not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists analyses_lookup_idx on public.analyses (kind, player_a, player_b, surface, created_at desc);
+create index if not exists analyses_user_idx on public.analyses (user_id, created_at desc);
+alter table public.analyses enable row level security;
+create policy "analyses self select" on public.analyses for select using (auth.uid() = user_id);
+create policy "analyses self insert" on public.analyses for insert with check (auth.uid() = user_id);

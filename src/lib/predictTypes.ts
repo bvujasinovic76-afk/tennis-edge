@@ -39,4 +39,6 @@ export type PredictResponse = {
   personas: PersonaResult[];
   judge: JudgeResult;
   final: FinalVerdict;
+  cached?: boolean;
+  cachedAt?: string;
 };

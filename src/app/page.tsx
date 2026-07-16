@@ -71,13 +71,29 @@ export default function Home() {
             )}
           </p>
         </div>
+        {ratings.eloV2 && (
+          <div className="mt-4 rounded-lg border border-line bg-surface px-5 py-4">
+            <p className="text-[11px] uppercase tracking-wide text-muted mb-2">Eksperiment faze 2 — pošten izveštaj</p>
+            <p className="text-sm text-ink-soft max-w-[75ch]">
+              Testirali smo model v2 koji u verovatnoću dodaje <strong>formu (poslednjih 10)</strong>,{" "}
+              <strong>međusobne mečeve (H2H)</strong> i <strong>dane odmora</strong> — treniran na periodu pre{" "}
+              {ratings.eloV2.backtest.windowStart}, testiran walk-forward posle. Rezultat:{" "}
+              <span className="tabular font-semibold text-risk">
+                ROI {ratings.eloV2.backtest.roiPct}% · tačnost {ratings.eloV2.backtest.favoriteAccuracyPct}% · log-loss {ratings.eloV2.backtest.avgLogLoss.toFixed(3)}
+              </span>{" "}
+              — <strong>gore od čistog Elo-a</strong> ({ratings.backtest.roiPct}% / {ratings.backtest.favoriteAccuracyPct}%).
+              Elo već upija formu kroz svakodnevno ažuriranje, pa ovi dodaci ne donose nov signal. Zato aplikacija{" "}
+              <strong>i dalje koristi v1</strong> — a ovaj nalaz ti štedi novac: ne veruj tipsterima koji prodaju „formu i H2H" kao edge.
+            </p>
+          </div>
+        )}
       </section>
 
       <Workbench players={players} />
 
       {/* player directory */}
       <section className="py-10 border-b border-line">
-        <SectionHead num="10" title={`Baza igrača (${players.length}) — pretraga i ATP rang`} />
+        <SectionHead num="11" title={`Baza igrača (${players.length}) — pretraga i ATP rang`} />
         <p className="text-ink-soft max-w-[68ch] mb-5">
           Svi igrači sa bar jednim odigranim mečem u 2022–2026 skupu podataka, sortirano po realnom ATP rangu
           (poslednji poznat rang iz istorijskih mečeva, ne Elo).

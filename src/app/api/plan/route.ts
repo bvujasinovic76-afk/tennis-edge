@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { fetchAtpFixtures, fetchEventOdds, type FixtureMatch } from "@/lib/sofascore";
+import { fetchEventOdds, type FixtureMatch } from "@/lib/sofascore";
+import { fetchFixturesSmart } from "@/lib/fixturesSmart";
 import { buildPlayerIndex, matchFullName } from "@/lib/nameMatch";
 import { players } from "@/lib/ratings";
 import { blendedRating, devig, expectedProb, EDGE_THRESHOLD_PCT, type Surface } from "@/lib/elo";
@@ -33,7 +34,7 @@ export type PlanPlay = {
 
 export async function GET() {
   try {
-    const { upcoming } = await fetchAtpFixtures();
+    const { upcoming, source } = await fetchFixturesSmart();
     const index = buildPlayerIndex(players);
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -93,6 +94,8 @@ export async function GET() {
       kellyMultiplier: state.kellyMultiplier,
       totalMatchesScanned: upcoming.length,
       matchedWithModel: matched.length,
+      // ESPN izvor nema kvote po meču — plan tada ne može da računa edge (Sofascore kvote rade samo lokalno).
+      oddsSource: source === "sofascore" ? "sofascore" : "none",
       plays,
     });
   } catch (err) {

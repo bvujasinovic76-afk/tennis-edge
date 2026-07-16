@@ -28,6 +28,7 @@ type PlanResponse = {
   kellyMultiplier: number;
   totalMatchesScanned: number;
   matchedWithModel: number;
+  oddsSource?: "sofascore" | "none";
   plays: PlanPlay[];
 };
 
@@ -89,8 +90,9 @@ export default function DailyPlan({ onAnalyze }: { onAnalyze: (a: string, b: str
 
       {data && data.plays.length === 0 && state === "done" && (
         <p className="text-sm text-muted">
-          Nijedan nadolazeći meč trenutno nema edge preko praga po Elo modelu vs tržišne kvote. To je normalno —
-          model nema dokazan edge (vidi track record). Bolje ništa nego loš tiket.
+          {data.oddsSource === "none"
+            ? "Kvote po meču trenutno nisu dostupne sa ovog servera (online izvor daje mečeve, ali ne i kvote) — plan sa edge-om radi u lokalnoj verziji. Mečeve i dalje možeš analizirati ručno ispod."
+            : "Nijedan nadolazeći meč trenutno nema edge preko praga po Elo modelu vs tržišne kvote. To je normalno — model nema dokazan edge (vidi track record). Bolje ništa nego loš tiket."}
         </p>
       )}
 

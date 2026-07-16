@@ -102,6 +102,11 @@ export default function AiCouncil({
 
       {result && (
         <div className="mt-6 border-t border-line pt-5 space-y-6">
+          {result.cached && (
+            <p className="text-xs rounded-md bg-good-bg text-good px-3 py-2 inline-block">
+              📁 Iz arhive ({result.cachedAt ? new Date(result.cachedAt).toLocaleString("sr-RS", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "ranije"}) — nije potrošen nijedan kredit.
+            </p>
+          )}
           <div>
             <p className="text-xs uppercase tracking-wide text-muted mb-3">Pet analitičara</p>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

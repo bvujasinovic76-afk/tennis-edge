@@ -17,6 +17,20 @@ export type RatingsData = {
     roiPct: number;
     referenceOdds: string;
   };
+  eloV2?: {
+    features: string[];
+    coefficients: Record<string, number>;
+    backtest: {
+      windowStart: string;
+      windowEnd: string;
+      matchesTested: number;
+      favoriteAccuracyPct: number;
+      avgLogLoss: number;
+      valueBetsFlagged: number;
+      roiPct: number;
+    };
+  };
+  h2h?: Record<string, [number, number]>;
   players: Player[];
 };
 
