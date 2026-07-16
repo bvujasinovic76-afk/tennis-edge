@@ -1,6 +1,7 @@
 import Workbench from "@/components/Workbench";
 import PlayerDirectory from "@/components/PlayerDirectory";
 import AuthStatus from "@/components/AuthStatus";
+import Guide from "@/components/Guide";
 import { MetaCell, SectionHead, StatTile } from "@/components/ui";
 import { ratings, players } from "@/lib/ratings";
 
@@ -32,6 +33,7 @@ export default function Home() {
           <MetaCell k="K-faktor" v={String(ratings.eloModel.kFactor)} />
           <MetaCell k="Blend" v="50/50 overall + podloga" />
         </div>
+        <Guide />
       </header>
 
       {/* backtest / track record */}
@@ -75,7 +77,7 @@ export default function Home() {
 
       {/* player directory */}
       <section className="py-10 border-b border-line">
-        <SectionHead num="09" title={`Baza igrača (${players.length}) — pretraga i ATP rang`} />
+        <SectionHead num="10" title={`Baza igrača (${players.length}) — pretraga i ATP rang`} />
         <p className="text-ink-soft max-w-[68ch] mb-5">
           Svi igrači sa bar jednim odigranim mečem u 2022–2026 skupu podataka, sortirano po realnom ATP rangu
           (poslednji poznat rang iz istorijskih mečeva, ne Elo).

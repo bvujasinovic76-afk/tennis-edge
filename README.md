@@ -22,6 +22,14 @@ i tenisu) — ovo je prvi konkretan, radni MVP, fokusiran samo na tenis.
   poredi sofascore igrače sa našom Elo bazom (po imenu) i, kad ih prepozna,
   odmah pokazuje Elo model % i dugme "Analiziraj" koje šalje par u kalkulator i
   AI konzilijum.
+- **Analiza meča — pregled za ljude** (`src/lib/narrative.ts`, 0 API kredita):
+  za izabrani par generiše analizu na srpskom koja se čita kao ljudski analitičar —
+  ko je favorit i zašto, forma, kome leži podloga, rang, i (uz kvote) gde je value —
+  plus uporednu tabelu jedan-pored-drugog sa označenim boljim u svakoj kategoriji.
+- **Vodič + rečnik** na vrhu sajta — tok rada u 6 koraka i objašnjenja pojmova
+  (edge, de-vig, Kelly, ROI...) da sve bude razumljivo i nekome ko se ne bavi ovim.
+- **Grafik kretanja bankrolla** u bankroll panelu — linija kroz obeležene tikete,
+  sa isprekidanom linijom početnog uloga.
 - **Baza igrača** — pretraga po imenu preko svih 543 igrača, sortirano po
   realnom ATP rangu (ne po Elo-u).
 - **Value-bet kalkulator**: unesi dva igrača + kvote — dobijaš Elo verovatnoću,

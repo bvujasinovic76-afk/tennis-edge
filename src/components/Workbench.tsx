@@ -7,6 +7,7 @@ import { BankrollProvider } from "./BankrollContext";
 import BankrollPanel from "./BankrollPanel";
 import DailyPlan from "./DailyPlan";
 import Fixtures from "./Fixtures";
+import MatchAnalysis from "./MatchAnalysis";
 import Strategies from "./Strategies";
 import Calculator from "./Calculator";
 import Research from "./Research";
@@ -19,7 +20,7 @@ export default function Workbench({ players }: { players: Player[] }) {
   function handlePick(a: string, b: string, surface: Surface) {
     setPick({ a, b, surface });
     setPickKey((k) => k + 1);
-    document.getElementById("kalkulator")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    document.getElementById("analiza")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   return (
@@ -51,8 +52,18 @@ export default function Workbench({ players }: { players: Player[] }) {
         <Fixtures onPick={handlePick} />
       </section>
 
+      <section id="analiza" className="py-10 border-b border-line">
+        <SectionHead num="05" title="Analiza meča — pregled za ljude" />
+        <p className="text-ink-soft max-w-[68ch] mb-5">
+          Izaberi dva igrača i dobijaš analizu napisanu ljudskim jezikom — ko je favorit i zašto, u kakvoj su formi,
+          kome leži podloga, šta kaže rang i (ako uneseš kvote) gde je value. Pored toga i tabela jedan-pored-drugog,
+          da sve vidiš na jedan pogled. Računa se odmah iz podataka, bez AI kredita.
+        </p>
+        <MatchAnalysis key={`analysis-${pickKey}`} players={players} initialA={pick?.a} initialB={pick?.b} initialSurface={pick?.surface} />
+      </section>
+
       <section id="strategije" className="py-10 border-b border-line">
-        <SectionHead num="05" title="Strategije — koja najbolje pristaje meču" />
+        <SectionHead num="06" title="Strategije — koja najbolje pristaje meču" />
         <p className="text-ink-soft max-w-[68ch] mb-5">
           Za izabrani meč računam u procentima koliko svaka strategija odgovara (čista matematika iz Elo-a i kvota —
           ne troši AI kredit). Najbolja je označena kao „Preporučeno", ali ti biraš koju ćeš igrati. Sistemi koji
@@ -62,7 +73,7 @@ export default function Workbench({ players }: { players: Player[] }) {
       </section>
 
       <section id="kalkulator" className="py-10 border-b border-line">
-        <SectionHead num="06" title="Value-bet kalkulator" />
+        <SectionHead num="07" title="Value-bet kalkulator" />
         <p className="text-ink-soft max-w-[68ch] mb-5">
           Izaberi dva igrača (pretraga po celoj bazi od {players.length} igrača) i podlogu, unesi kvote — dobijaš
           Elo verovatnoću, de-vig tržišnu verovatnoću, edge, Kelly ulog, i dugme da odmah dodaš na tiket.
@@ -71,7 +82,7 @@ export default function Workbench({ players }: { players: Player[] }) {
       </section>
 
       <section className="py-10 border-b border-line">
-        <SectionHead num="07" title="Istraživanje uživo — povrede, srpske kvote, forumi" />
+        <SectionHead num="08" title="Istraživanje uživo — povrede, srpske kvote, forumi" />
         <p className="text-ink-soft max-w-[68ch] mb-5">
           Tri agenta pretražuju internet u realnom vremenu: jedan lovi povrede i vesti, jedan gleda srpske
           kladionice i kretanje kvota, jedan čita forume i sentiment zajednice. Glavni istraživač spaja sve u
@@ -81,7 +92,7 @@ export default function Workbench({ players }: { players: Player[] }) {
       </section>
 
       <section className="py-10 border-b border-line">
-        <SectionHead num="08" title="AI konzilijum" />
+        <SectionHead num="09" title="AI konzilijum" />
         <p className="text-ink-soft max-w-[68ch] mb-5">
           Pet AI analitičara (svaki drugi model, drugi karakter) nezavisno daju pick, sudija ocenjuje njihovo
           rezonovanje naspram Elo brojeva, glavni analitičar sklapa finalni plan igre sa Kelly ulogom.

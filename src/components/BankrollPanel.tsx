@@ -100,6 +100,8 @@ export default function BankrollPanel() {
         <Stat label="Tiketa (aktivnih)" value={`${stats.totalBets}`} sub={`${stats.pendingBets} u toku`} />
       </div>
 
+      <BankrollSpark startingBankroll={state.startingBankroll} bets={state.bets} currency={stats.currency} />
+
       <div className="border-t border-line pt-4">
         <div className="flex items-center justify-between mb-3">
           <p className="text-xs uppercase tracking-wide text-muted">Istorija tiketa</p>
@@ -126,6 +128,47 @@ export default function BankrollPanel() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/** Kretanje bankrolla kroz obeležene tikete — čovek na jedan pogled vidi da li ide gore ili dole. */
+function BankrollSpark({ startingBankroll, bets, currency }: { startingBankroll: number; bets: Bet[]; currency: string }) {
+  const settled = bets
+    .filter((b) => b.status === "won" || b.status === "lost")
+    .sort((x, y) => new Date(x.settledAt ?? x.placedAt).getTime() - new Date(y.settledAt ?? y.placedAt).getTime());
+  if (settled.length < 2) return null;
+
+  let run = startingBankroll;
+  const vals = [run];
+  for (const b of settled) {
+    run += betPnl(b);
+    vals.push(run);
+  }
+  const min = Math.min(...vals);
+  const max = Math.max(...vals);
+  const span = max - min || 1;
+  const W = 260;
+  const H = 56;
+  const P = 4;
+  const pts = vals.map((v, i) => [P + (i * (W - 2 * P)) / (vals.length - 1), H - P - ((v - min) / span) * (H - 2 * P)] as const);
+  const up = vals[vals.length - 1] >= vals[0];
+  const color = up ? "var(--good)" : "var(--risk)";
+  const last = pts[pts.length - 1];
+
+  return (
+    <div className="mb-5 rounded-lg border border-line bg-paper px-4 py-3">
+      <div className="flex items-center justify-between mb-1">
+        <p className="text-[10px] uppercase tracking-wide text-muted">Kretanje bankrolla (obeleženi tiketi)</p>
+        <p className={`text-xs tabular font-semibold ${up ? "text-good" : "text-risk"}`}>
+          {formatMoney(vals[0], currency)} → {formatMoney(vals[vals.length - 1], currency)}
+        </p>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full max-w-[420px] h-14" role="img" aria-label="Grafik kretanja bankrolla kroz odigrane tikete">
+        <line x1={P} y1={H - P - ((startingBankroll - min) / span) * (H - 2 * P)} x2={W - P} y2={H - P - ((startingBankroll - min) / span) * (H - 2 * P)} stroke="var(--line)" strokeWidth="1" strokeDasharray="3 3" />
+        <polyline points={pts.map(([x, y]) => `${x},${y}`).join(" ")} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+        <circle cx={last[0]} cy={last[1]} r="3" fill={color} />
+      </svg>
     </div>
   );
 }
