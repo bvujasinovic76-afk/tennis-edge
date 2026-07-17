@@ -78,3 +78,23 @@ create index if not exists analyses_user_idx on public.analyses (user_id, create
 alter table public.analyses enable row level security;
 create policy "analyses self select" on public.analyses for select using (auth.uid() = user_id);
 create policy "analyses self insert" on public.analyses for insert with check (auth.uid() = user_id);
+
+-- Dnevni plan ("listić") — zaključava se po danu da ne skače tokom dana.
+create table if not exists public.daily_plans (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  plan_date date not null,
+  generated_at timestamptz not null default now(),
+  bankroll_at_gen numeric not null default 0,
+  picks jsonb not null default '[]'::jsonb,
+  unique (user_id, plan_date)
+);
+create index if not exists daily_plans_user_date_idx on public.daily_plans (user_id, plan_date desc);
+alter table public.daily_plans enable row level security;
+create policy "plans self select" on public.daily_plans for select using (auth.uid() = user_id);
+create policy "plans self insert" on public.daily_plans for insert with check (auth.uid() = user_id);
+create policy "plans self update" on public.daily_plans for update using (auth.uid() = user_id);
+create policy "plans self delete" on public.daily_plans for delete using (auth.uid() = user_id);
+
+-- Odakle je tiket došao: 'app' (klik) ili 'slika' (skeniran sa fotografije).
+alter table public.bets add column if not exists source text not null default 'app';

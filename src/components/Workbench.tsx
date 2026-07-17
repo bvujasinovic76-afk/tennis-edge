@@ -4,6 +4,8 @@ import { useState } from "react";
 import type { Player, Surface } from "@/lib/elo";
 import { BankrollProvider } from "./BankrollContext";
 import Dashboard from "./Dashboard";
+import DailyPlanCalendar from "./DailyPlanCalendar";
+import TicketScan from "./TicketScan";
 import Tabs from "./Tabs";
 import BankrollPanel from "./BankrollPanel";
 import Fixtures from "./Fixtures";
@@ -31,8 +33,10 @@ export default function Workbench({ players }: { players: Player[] }) {
 
   return (
     <BankrollProvider>
-      <section className="py-8">
+      <section className="py-8 space-y-6">
         <Dashboard players={players} onAnalyze={handlePick} />
+        <DailyPlanCalendar onAnalyze={handlePick} />
+        <TicketScan />
       </section>
 
       <section id="alati" className="py-8 border-t border-line">
