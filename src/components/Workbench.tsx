@@ -17,6 +17,7 @@ import Research from "./Research";
 import AiCouncil from "./AiCouncil";
 import ArchiveList from "./ArchiveList";
 import Coach from "./Coach";
+import SystemsBacktest from "./SystemsBacktest";
 import PlayerDirectory from "./PlayerDirectory";
 
 export default function Workbench({ players }: { players: Player[] }) {
@@ -59,6 +60,16 @@ export default function Workbench({ players }: { players: Player[] }) {
                 <>
                   {intro("Ubaci tikete koje si već odigrao (slikaj gore ili unesi ručno) — pa ti tačno pokažem gde gubiš i šta bi drugačije donelo bolji ishod. Računa se iz tvoje istorije, bez AI kredita.")}
                   <Coach />
+                </>
+              ),
+            },
+            {
+              id: "sistemi",
+              label: "📊 Koji sistem radi",
+              content: (
+                <>
+                  {intro("Simulacija na 2.928 stvarnih mečeva sa stvarnim kvotama: kako bi prošao da si igrao 1 singl, 2 singla, kombinaciju 2/3/4 para… Isti novac u igri, jedina razlika je forma tiketa.")}
+                  <SystemsBacktest />
                 </>
               ),
             },

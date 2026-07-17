@@ -16,6 +16,11 @@
   --risk-line: #e3b3ac;
   --good: #276b45;
   --good-bg: #ebf3ee;
+  /* Boje za grafike — provereno na kontrast i razlikovanje kod daltonizma. */
+  --c1: #0089a8;
+  --c2: #c98a1e;
+  --c3: #2f8f5b;
+  --c4: #9c3f94;
 }
 
 @theme inline {
@@ -56,6 +61,11 @@
     --risk-line: #5a2e29;
     --good: #57c288;
     --good-bg: #132420;
+    /* Tamna tema traži svetlije verzije da bi se videle na tamnoj podlozi. */
+    --c1: #1fa0be;
+    --c2: #b8790f;
+    --c3: #3fa46b;
+    --c4: #b354ab;
   }
 }
 
