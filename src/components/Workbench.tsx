@@ -16,12 +16,13 @@ import Calculator from "./Calculator";
 import Research from "./Research";
 import AiCouncil from "./AiCouncil";
 import ArchiveList from "./ArchiveList";
+import Coach from "./Coach";
 import PlayerDirectory from "./PlayerDirectory";
 
 export default function Workbench({ players }: { players: Player[] }) {
   const [pick, setPick] = useState<{ a: string; b: string; surface: Surface } | null>(null);
   const [pickKey, setPickKey] = useState(0);
-  const [tab, setTab] = useState("analiza");
+  const [tab, setTab] = useState("greske");
 
   function handlePick(a: string, b: string, surface: Surface) {
     setPick({ a, b, surface });
@@ -51,6 +52,16 @@ export default function Workbench({ players }: { players: Player[] }) {
           key={tab}
           initial={tab}
           tabs={[
+            {
+              id: "greske",
+              label: "🔍 Gde grešim",
+              content: (
+                <>
+                  {intro("Ubaci tikete koje si već odigrao (slikaj gore ili unesi ručno) — pa ti tačno pokažem gde gubiš i šta bi drugačije donelo bolji ishod. Računa se iz tvoje istorije, bez AI kredita.")}
+                  <Coach />
+                </>
+              ),
+            },
             {
               id: "analiza",
               label: "Analiza meča",

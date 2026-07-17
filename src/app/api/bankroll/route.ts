@@ -40,17 +40,28 @@ export async function POST(req: NextRequest) {
         break;
       }
       case "addBet": {
-        const { matchLabel, pick, odds, stake, modelProb, source, legs } = body as {
+        const { matchLabel, pick, odds, stake, modelProb, source, legs, status, placedAt } = body as {
           matchLabel: string; pick: string; odds: number; stake: number; modelProb: number; source?: string;
-          legs?: { match: string; pick: string; odds: number }[];
+          legs?: { match: string; pick: string; odds: number; result?: string }[];
+          status?: string; placedAt?: string;
         };
         if (!matchLabel || !pick || !(Number(odds) > 1) || !(Number(stake) > 0)) {
           return NextResponse.json({ error: "Nedostaju validni podaci o tiketu (par, pick, kvota > 1, ulog > 0)." }, { status: 400 });
         }
         // Kombinacija: čuva se kao JEDAN tiket sa svim parovima — pada ako bilo koji par padne.
         const validLegs = Array.isArray(legs)
-          ? legs.filter((l) => l && l.match && l.pick && Number(l.odds) > 1).map((l) => ({ match: l.match, pick: l.pick, odds: Number(l.odds), result: "pending" as const }))
+          ? legs
+              .filter((l) => l && l.match && l.pick && Number(l.odds) > 1)
+              .map((l) => ({
+                match: l.match,
+                pick: l.pick,
+                odds: Number(l.odds),
+                result: l.result === "won" || l.result === "lost" ? l.result : ("pending" as const),
+              }))
           : [];
+
+        // Za ručni unos već odigranih tiketa dozvoljavamo da odmah stigne sa ishodom.
+        const st = status === "won" || status === "lost" || status === "void" ? status : "pending";
         const { error } = await supabase.from("bets").insert({
           user_id: user.id,
           match_label: matchLabel,
@@ -58,8 +69,11 @@ export async function POST(req: NextRequest) {
           odds: Number(odds),
           stake: Number(stake),
           model_prob: Number(modelProb) || 0,
-          source: source === "slika" ? "slika" : "app",
+          source: source === "slika" ? "slika" : source === "rucno" ? "rucno" : "app",
           legs: validLegs.length >= 2 ? validLegs : null,
+          status: st,
+          settled_at: st === "pending" ? null : new Date().toISOString(),
+          ...(placedAt ? { placed_at: placedAt } : {}),
         });
         if (error) throw error;
         break;

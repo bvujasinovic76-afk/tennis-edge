@@ -15,7 +15,9 @@ type BankrollContextValue = {
   placeBet: (
     bet: Pick<Bet, "matchLabel" | "pick" | "odds" | "stake" | "modelProb"> & {
       source?: string;
-      legs?: { match: string; pick: string; odds: number }[];
+      legs?: { match: string; pick: string; odds: number; result?: string }[];
+      status?: "pending" | "won" | "lost";
+      placedAt?: string;
     }
   ) => Promise<void>;
   settleBet: (id: string, status: "won" | "lost" | "void") => Promise<void>;
