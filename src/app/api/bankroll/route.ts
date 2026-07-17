@@ -40,12 +40,17 @@ export async function POST(req: NextRequest) {
         break;
       }
       case "addBet": {
-        const { matchLabel, pick, odds, stake, modelProb, source } = body as {
+        const { matchLabel, pick, odds, stake, modelProb, source, legs } = body as {
           matchLabel: string; pick: string; odds: number; stake: number; modelProb: number; source?: string;
+          legs?: { match: string; pick: string; odds: number }[];
         };
         if (!matchLabel || !pick || !(Number(odds) > 1) || !(Number(stake) > 0)) {
           return NextResponse.json({ error: "Nedostaju validni podaci o tiketu (par, pick, kvota > 1, ulog > 0)." }, { status: 400 });
         }
+        // Kombinacija: čuva se kao JEDAN tiket sa svim parovima — pada ako bilo koji par padne.
+        const validLegs = Array.isArray(legs)
+          ? legs.filter((l) => l && l.match && l.pick && Number(l.odds) > 1).map((l) => ({ match: l.match, pick: l.pick, odds: Number(l.odds), result: "pending" as const }))
+          : [];
         const { error } = await supabase.from("bets").insert({
           user_id: user.id,
           match_label: matchLabel,
@@ -54,6 +59,7 @@ export async function POST(req: NextRequest) {
           stake: Number(stake),
           model_prob: Number(modelProb) || 0,
           source: source === "slika" ? "slika" : "app",
+          legs: validLegs.length >= 2 ? validLegs : null,
         });
         if (error) throw error;
         break;

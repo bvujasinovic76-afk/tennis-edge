@@ -15,7 +15,7 @@ export async function POST() {
 
   const { data: pending, error } = await supabase
     .from("bets")
-    .select("id, match_label, pick")
+    .select("id, match_label, pick, legs")
     .eq("user_id", user.id)
     .eq("status", "pending");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -44,19 +44,49 @@ export async function POST() {
     }))
     .filter((m) => m.home && m.away && m.winner);
 
+  /** Nađi pobednika za "Igrač A vs Igrač B" ili "Igrač A - Igrač B" (sa slike). */
+  function winnerOf(label: string): string | null {
+    const m = label.match(/^(.+?)\s+(?:vs|-)\s+(.+?)(?:\s*\(|$)/);
+    if (!m) return null;
+    const a = m[1].trim();
+    const b = m[2].trim().replace(/\s*·.*$/, "");
+    const f = finishedMapped.find((x) => (x.home === a && x.away === b) || (x.home === b && x.away === a));
+    return f?.winner ?? null;
+  }
+
   const settled: { id: string; pick: string; matchLabel: string; result: "won" | "lost" }[] = [];
 
   for (const bet of pending) {
-    // matchLabel format: "Igrač A vs Igrač B (Podloga)" — eventualno "· Strategija" na kraju.
-    const m = bet.match_label.match(/^(.+?) vs (.+?) \(/);
-    if (!m) continue;
-    const [, betA, betB] = m;
-    const match = finishedMapped.find(
-      (f) => (f.home === betA && f.away === betB) || (f.home === betB && f.away === betA)
-    );
-    if (!match) continue;
+    const legs = Array.isArray(bet.legs) ? (bet.legs as { match: string; pick: string; odds: number; result?: string }[]) : null;
 
-    const result: "won" | "lost" = match.winner === bet.pick ? "won" : "lost";
+    // --- KOMBINACIJA: tiket pada ako BILO KOJI par padne; prolazi tek kad SVI parovi prođu. ---
+    if (legs && legs.length >= 2) {
+      const resolved = legs.map((l) => {
+        const w = winnerOf(l.match);
+        if (!w) return { ...l, result: "pending" as const };
+        return { ...l, result: (w === l.pick ? "won" : "lost") as "won" | "lost" };
+      });
+      const anyLost = resolved.some((l) => l.result === "lost");
+      const allWon = resolved.every((l) => l.result === "won");
+      if (!anyLost && !allWon) {
+        // Bar jedan par još nije odigran — samo upiši međurezultate parova.
+        await supabase.from("bets").update({ legs: resolved }).eq("id", bet.id).eq("user_id", user.id);
+        continue;
+      }
+      const result: "won" | "lost" = anyLost ? "lost" : "won";
+      const { error: upErr } = await supabase
+        .from("bets")
+        .update({ status: result, legs: resolved, settled_at: new Date().toISOString() })
+        .eq("id", bet.id)
+        .eq("user_id", user.id);
+      if (!upErr) settled.push({ id: bet.id, pick: bet.pick, matchLabel: bet.match_label, result });
+      continue;
+    }
+
+    // --- SINGL tiket ---
+    const w = winnerOf(bet.match_label);
+    if (!w) continue;
+    const result: "won" | "lost" = w === bet.pick ? "won" : "lost";
     const { error: upErr } = await supabase
       .from("bets")
       .update({ status: result, settled_at: new Date().toISOString() })

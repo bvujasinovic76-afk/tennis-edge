@@ -12,7 +12,12 @@ type BankrollContextValue = {
   authed: boolean;
   refresh: () => Promise<void>;
   setBankroll: (startingBankroll: number, kellyMultiplier?: number) => Promise<void>;
-  placeBet: (bet: Pick<Bet, "matchLabel" | "pick" | "odds" | "stake" | "modelProb"> & { source?: string }) => Promise<void>;
+  placeBet: (
+    bet: Pick<Bet, "matchLabel" | "pick" | "odds" | "stake" | "modelProb"> & {
+      source?: string;
+      legs?: { match: string; pick: string; odds: number }[];
+    }
+  ) => Promise<void>;
   settleBet: (id: string, status: "won" | "lost" | "void") => Promise<void>;
   deleteBet: (id: string) => Promise<void>;
   reset: () => Promise<void>;

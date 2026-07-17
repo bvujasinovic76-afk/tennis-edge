@@ -2,17 +2,36 @@ import { kellyFraction } from "./elo";
 
 export type BetStatus = "pending" | "won" | "lost" | "void";
 
+/** Jedan par unutar kombinacije. Kombinacija je JEDAN tiket: padne li jedan par, pada ceo tiket. */
+export type BetLeg = {
+  match: string;
+  pick: string;
+  odds: number;
+  result?: "won" | "lost" | "pending";
+};
+
 export type Bet = {
   id: string;
   placedAt: string; // ISO
-  matchLabel: string; // "Sinner J. vs Alcaraz C. (Hard)"
-  pick: string; // player name backed
-  odds: number; // decimal odds taken
-  stake: number; // amount staked (currency units)
-  modelProb: number; // 0..1 model win prob at placement time
+  matchLabel: string; // "Sinner J. vs Alcaraz C. (Hard)" ili "Kombinacija (3 para)"
+  pick: string; // igrač na koga se igra (singl) ili sažetak kombinacije
+  odds: number; // za kombinaciju: UKUPNA kvota (proizvod svih parova)
+  stake: number; // ulog na CEO tiket (ne po paru)
+  modelProb: number; // 0..1 — za kombinaciju: proizvod verovatnoća svih parova
   status: BetStatus;
   settledAt?: string;
+  legs?: BetLeg[]; // prisutno samo za kombinacije (2+ para)
 };
+
+/** Ukupna kvota kombinacije = proizvod pojedinačnih kvota. */
+export function combinedOdds(legs: { odds: number }[]): number {
+  return Math.round(legs.reduce((acc, l) => acc * l.odds, 1) * 100) / 100;
+}
+
+/** Šansa da kombinacija prođe = proizvod verovatnoća (svi parovi moraju da prođu). */
+export function combinedProb(probs: number[]): number {
+  return probs.reduce((acc, p) => acc * p, 1);
+}
 
 export type BankrollState = {
   currency: string; // "RSD"

@@ -164,9 +164,28 @@ export default function Dashboard({ players, onAnalyze }: { players: Player[]; o
               </thead>
               <tbody>
                 {pending.map((bt) => (
-                  <tr key={bt.id} className="border-b border-line/60">
-                    <td className="py-2 pr-3 text-ink-soft text-[13px]">{bt.matchLabel}</td>
-                    <td className="py-2 px-2 font-medium text-ink">{bt.pick}</td>
+                  <tr key={bt.id} className="border-b border-line/60 align-top">
+                    <td className="py-2 pr-3 text-ink-soft text-[13px]">
+                      {bt.matchLabel}
+                      {/* Kombinacija: parovi se vide, ali tiket je JEDAN — padne li jedan par, pada sve. */}
+                      {bt.legs && bt.legs.length >= 2 && (
+                        <ul className="mt-1 space-y-0.5">
+                          {bt.legs.map((l, i) => (
+                            <li key={i} className="text-[11px] text-muted flex items-center gap-1.5">
+                              <span className={l.result === "won" ? "text-good" : l.result === "lost" ? "text-risk" : "text-muted"}>
+                                {l.result === "won" ? "✓" : l.result === "lost" ? "✗" : "•"}
+                              </span>
+                              <span className="text-ink-soft">{l.pick}</span>
+                              <span className="tabular">@{l.odds.toFixed(2)}</span>
+                              <span className="truncate">— {l.match}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </td>
+                    <td className="py-2 px-2 font-medium text-ink">
+                      {bt.legs && bt.legs.length >= 2 ? <span className="text-[12px]">{bt.legs.length} para (sve mora proći)</span> : bt.pick}
+                    </td>
                     <td className="py-2 px-2 text-right tabular text-ink-soft">{bt.odds.toFixed(2)}</td>
                     <td className="py-2 px-2 text-right tabular text-ink">{formatMoney(bt.stake, cur)}</td>
                     <td className="py-2 px-2 text-right tabular font-semibold text-good">+{formatMoney(bt.stake * (bt.odds - 1), cur)}</td>

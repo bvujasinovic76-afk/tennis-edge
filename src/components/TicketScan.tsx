@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { combinedOdds } from "@/lib/bankroll";
 import { useBankroll, formatMoney } from "./BankrollContext";
 
 type Leg = { match: string; pick: string; odds: number | null };
@@ -52,7 +53,7 @@ export default function TicketScan() {
 
   async function save() {
     if (!ticket) return;
-    const legs = ticket.legs.filter((l) => l.odds && l.odds > 1);
+    const legs = ticket.legs.filter((l): l is Leg & { odds: number } => !!l.odds && l.odds > 1);
     if (legs.length === 0) {
       setError("Nijedan par nema pročitanu kvotu — ne mogu da upišem.");
       return;
@@ -62,18 +63,20 @@ export default function TicketScan() {
       setError("Unesi ulog.");
       return;
     }
-    // Singl tiket → ceo ulog; kombinacija → ulog se deli na parove radi praćenja pojedinačno.
-    const per = Math.round(totalStake / legs.length);
-    for (const l of legs) {
-      await placeBet({
-        matchLabel: `${l.match}${ticket.bookmaker ? ` · ${ticket.bookmaker}` : ""}`,
-        pick: l.pick,
-        odds: l.odds!,
-        stake: per,
-        modelProb: 0,
-        source: "slika",
-      });
-    }
+
+    // Kombinacija je JEDAN tiket: jedan ulog, ukupna kvota = proizvod, i pada ako bilo koji par padne.
+    // (Ranije se delila na više tiketa — to je pogrešno prikazivalo ishod.)
+    const total = ticket.totalOdds && ticket.totalOdds > 1 ? ticket.totalOdds : combinedOdds(legs);
+    const bk = ticket.bookmaker ? ` · ${ticket.bookmaker}` : "";
+    await placeBet({
+      matchLabel: legs.length === 1 ? `${legs[0].match}${bk}` : `Kombinacija ${legs.length} para${bk}`,
+      pick: legs.length === 1 ? legs[0].pick : legs.map((l) => l.pick).join(" + "),
+      odds: total,
+      stake: totalStake,
+      modelProb: 0,
+      source: "slika",
+      legs: legs.length >= 2 ? legs.map((l) => ({ match: l.match, pick: l.pick, odds: l.odds })) : undefined,
+    });
     await refresh();
     setStatus("saved");
   }
@@ -177,7 +180,9 @@ export default function TicketScan() {
                   {ticket.notes && <p className="mt-2 text-[11px] text-muted">Napomena modela: {ticket.notes}</p>}
                   {ticket.legs.length > 1 && (
                     <p className="mt-1 text-[11px] text-muted">
-                      Kombinacija — ulog delim na {ticket.legs.length} para da bi svaki mogao da se prati posebno.
+                      Kombinacija — čuva se kao <strong>jedan tiket</strong> (ukupna kvota{" "}
+                      {(ticket.totalOdds ?? combinedOdds(ticket.legs.filter((l): l is Leg & { odds: number } => !!l.odds))).toFixed(2)}).
+                      Ako <strong>bilo koji</strong> par padne, ceo tiket je izgubljen.
                     </p>
                   )}
                 </>

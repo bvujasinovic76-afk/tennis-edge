@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { BankrollState, Bet } from "./bankroll";
+import type { BankrollState, Bet, BetLeg } from "./bankroll";
 
 type BetRow = {
   id: string;
@@ -11,6 +11,7 @@ type BetRow = {
   model_prob: number | string;
   status: Bet["status"];
   settled_at: string | null;
+  legs: BetLeg[] | null;
 };
 
 function mapBet(r: BetRow): Bet {
@@ -24,6 +25,7 @@ function mapBet(r: BetRow): Bet {
     modelProb: Number(r.model_prob),
     status: r.status,
     settledAt: r.settled_at ?? undefined,
+    legs: Array.isArray(r.legs) && r.legs.length > 0 ? r.legs : undefined,
   };
 }
 

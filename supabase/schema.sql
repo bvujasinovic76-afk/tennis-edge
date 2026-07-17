@@ -98,3 +98,7 @@ create policy "plans self delete" on public.daily_plans for delete using (auth.u
 
 -- Odakle je tiket došao: 'app' (klik) ili 'slika' (skeniran sa fotografije).
 alter table public.bets add column if not exists source text not null default 'app';
+
+-- Kombinacije: tiket sa vise parova je JEDAN ulog (sve-ili-nista).
+-- bets.odds = ukupna (proizvod) kvota; bets.legs = pojedinacni parovi.
+alter table public.bets add column if not exists legs jsonb;

@@ -5,6 +5,7 @@ import type { Player, Surface } from "@/lib/elo";
 import { BankrollProvider } from "./BankrollContext";
 import Dashboard from "./Dashboard";
 import DailyPlanCalendar from "./DailyPlanCalendar";
+import TicketsOfDay from "./TicketsOfDay";
 import TicketScan from "./TicketScan";
 import Tabs from "./Tabs";
 import BankrollPanel from "./BankrollPanel";
@@ -35,6 +36,7 @@ export default function Workbench({ players }: { players: Player[] }) {
     <BankrollProvider>
       <section className="py-8 space-y-6">
         <Dashboard players={players} onAnalyze={handlePick} />
+        <TicketsOfDay onAnalyze={handlePick} />
         <DailyPlanCalendar onAnalyze={handlePick} />
         <TicketScan />
       </section>
