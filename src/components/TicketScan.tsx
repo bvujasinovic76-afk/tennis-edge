@@ -15,182 +15,313 @@ type Ticket = {
   notes: string | null;
 };
 
-/** Slikaj tiket → vision model ga pročita → potvrdiš → upiše se u istoriju. */
+type ScanItem = {
+  id: string;
+  fileName: string;
+  preview: string;
+  status: "cekanje" | "citam" | "gotovo" | "greska" | "upisano";
+  ticket?: Ticket;
+  error?: string;
+  stake: string;
+  result: "pending" | "won" | "lost";
+};
+
+/** Slikaj jedan ili više tiketa → svaki se pročita → potvrdiš → upišu se u istoriju. */
 export default function TicketScan() {
   const { authed, state, placeBet, refresh } = useBankroll();
-  const [preview, setPreview] = useState<string | null>(null);
-  const [ticket, setTicket] = useState<Ticket | null>(null);
-  const [status, setStatus] = useState<"idle" | "scanning" | "done" | "error" | "saved">("idle");
-  const [error, setError] = useState("");
-  const [stakeEdit, setStakeEdit] = useState("");
+  const [items, setItems] = useState<ScanItem[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [savingAll, setSavingAll] = useState(false);
 
   if (!authed) return null;
   const cur = state?.currency ?? "RSD";
 
-  async function onFile(file: File) {
-    setError("");
-    setTicket(null);
-    setStatus("scanning");
-    try {
-      // Smanji sliku pre slanja — brže i jeftinije, a čitljivost ostaje.
-      const dataUrl = await downscale(file, 1400);
-      setPreview(dataUrl);
-      const res = await fetch("/api/scan-ticket", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: dataUrl }),
+  async function onFiles(files: FileList) {
+    const list = Array.from(files).slice(0, 12); // razuman limit po seriji
+    const prepared: ScanItem[] = [];
+    for (const f of list) {
+      const preview = await downscale(f, 1400);
+      prepared.push({
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        fileName: f.name,
+        preview,
+        status: "cekanje",
+        stake: "",
+        result: "pending",
       });
-      const j = await res.json();
-      if (!res.ok) throw new Error(j.error ?? `HTTP ${res.status}`);
-      setTicket(j.ticket);
-      setStakeEdit(j.ticket?.stake != null ? String(j.ticket.stake) : "");
-      setStatus("done");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Greška pri čitanju.");
-      setStatus("error");
     }
+    setItems((prev) => [...prev, ...prepared]);
+    setBusy(true);
+
+    // Redom, jedan po jedan — da ne udaramo API u isto vreme i da vidiš napredak.
+    for (const item of prepared) {
+      setItems((prev) => prev.map((x) => (x.id === item.id ? { ...x, status: "citam" } : x)));
+      try {
+        const res = await fetch("/api/scan-ticket", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ image: item.preview }),
+        });
+        const j = await res.json();
+        if (!res.ok) throw new Error(j.error ?? `HTTP ${res.status}`);
+        setItems((prev) =>
+          prev.map((x) =>
+            x.id === item.id
+              ? { ...x, status: "gotovo", ticket: j.ticket, stake: j.ticket?.stake != null ? String(j.ticket.stake) : "" }
+              : x
+          )
+        );
+      } catch (e) {
+        setItems((prev) =>
+          prev.map((x) => (x.id === item.id ? { ...x, status: "greska", error: e instanceof Error ? e.message : "Greška." } : x))
+        );
+      }
+    }
+    setBusy(false);
   }
 
-  async function save() {
-    if (!ticket) return;
-    const legs = ticket.legs.filter((l): l is Leg & { odds: number } => !!l.odds && l.odds > 1);
-    if (legs.length === 0) {
-      setError("Nijedan par nema pročitanu kvotu — ne mogu da upišem.");
-      return;
-    }
-    const totalStake = parseFloat(stakeEdit);
-    if (!(totalStake > 0)) {
-      setError("Unesi ulog.");
-      return;
-    }
+  async function saveOne(item: ScanItem): Promise<boolean> {
+    if (!item.ticket) return false;
+    const legs = item.ticket.legs.filter((l): l is Leg & { odds: number } => !!l.odds && l.odds > 1);
+    const stakeNum = parseFloat(item.stake);
+    if (legs.length === 0 || !(stakeNum > 0)) return false;
 
-    // Kombinacija je JEDAN tiket: jedan ulog, ukupna kvota = proizvod, i pada ako bilo koji par padne.
-    // (Ranije se delila na više tiketa — to je pogrešno prikazivalo ishod.)
-    const total = ticket.totalOdds && ticket.totalOdds > 1 ? ticket.totalOdds : combinedOdds(legs);
-    const bk = ticket.bookmaker ? ` · ${ticket.bookmaker}` : "";
+    // Kombinacija = JEDAN tiket: ukupna kvota je proizvod, pada ako bilo koji par padne.
+    const total = item.ticket.totalOdds && item.ticket.totalOdds > 1 ? item.ticket.totalOdds : combinedOdds(legs);
+    const bk = item.ticket.bookmaker ? ` · ${item.ticket.bookmaker}` : "";
     await placeBet({
       matchLabel: legs.length === 1 ? `${legs[0].match}${bk}` : `Kombinacija ${legs.length} para${bk}`,
-      pick: legs.length === 1 ? legs[0].pick : legs.map((l) => l.pick).join(" + "),
+      pick: legs.map((l) => l.pick).join(" + "),
       odds: total,
-      stake: totalStake,
+      stake: stakeNum,
       modelProb: 0,
       source: "slika",
-      legs: legs.length >= 2 ? legs.map((l) => ({ match: l.match, pick: l.pick, odds: l.odds })) : undefined,
+      status: item.result,
+      legs:
+        legs.length >= 2
+          ? legs.map((l) => ({ match: l.match, pick: l.pick, odds: l.odds, result: item.result === "pending" ? "pending" : undefined }))
+          : undefined,
     });
-    await refresh();
-    setStatus("saved");
+    setItems((prev) => prev.map((x) => (x.id === item.id ? { ...x, status: "upisano" } : x)));
+    return true;
   }
+
+  async function saveAll() {
+    setSavingAll(true);
+    try {
+      for (const it of items.filter((x) => x.status === "gotovo")) {
+        await saveOne(it);
+      }
+      await refresh();
+    } finally {
+      setSavingAll(false);
+    }
+  }
+
+  const ready = items.filter((x) => x.status === "gotovo");
+  const done = items.filter((x) => x.status === "upisano").length;
+  const scanning = items.filter((x) => x.status === "citam" || x.status === "cekanje").length;
 
   return (
     <div className="rounded-xl border border-line bg-surface shadow-sm p-5">
       <h3 className="font-display font-bold text-lg text-ink mb-1" style={{ fontStretch: "85%" }}>
-        📷 Slikaj tiket — sam ga pročitam i zapišem
+        📷 Slikaj tikete — sam ih pročitam i zapišem
       </h3>
-      <p className="text-sm text-muted mb-4 max-w-[62ch]">
-        Odigraš na kladionici, slikaš tiket telefonom i ubaciš ovde. Pročitam parove, kvote i ulog, ti potvrdiš —
-        i tiket ulazi u tvoju istoriju sa svim ostalim.
+      <p className="text-sm text-muted mb-4 max-w-[64ch]">
+        Možeš ubaciti <strong>više tiketa odjednom</strong>. Pročitam parove, kvote i ulog sa svakog, ti označiš ishod i
+        potvrdiš — pa svi uđu u istoriju i u analizu „Gde grešim".
       </p>
 
-      <label className="inline-block">
-        <span className="inline-block rounded-md bg-accent text-accent-contrast font-semibold text-sm px-4 py-2.5 cursor-pointer hover:brightness-95 transition">
-          {status === "scanning" ? "Čitam tiket…" : "Izaberi / slikaj tiket"}
-        </span>
-        <input
-          type="file"
-          accept="image/*"
-          capture="environment"
-          className="hidden"
-          disabled={status === "scanning"}
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) onFile(f);
-          }}
-        />
-      </label>
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="inline-block">
+          <span className={`inline-block rounded-md bg-accent text-accent-contrast font-semibold text-sm px-4 py-2.5 transition ${busy ? "opacity-50" : "cursor-pointer hover:brightness-95"}`}>
+            {busy ? `Čitam… (${items.filter((x) => x.status === "gotovo" || x.status === "greska").length}/${items.length})` : "Izaberi / slikaj tikete"}
+          </span>
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            capture="environment"
+            className="hidden"
+            disabled={busy}
+            onChange={(e) => {
+              if (e.target.files?.length) onFiles(e.target.files);
+              e.target.value = "";
+            }}
+          />
+        </label>
 
-      {error && <div className="mt-3 rounded-md border border-risk-line bg-risk-bg px-3 py-2 text-sm text-risk">{error}</div>}
+        {ready.length > 0 && (
+          <button
+            onClick={saveAll}
+            disabled={savingAll}
+            className="rounded-md border border-accent text-accent font-semibold text-sm px-4 py-2.5 disabled:opacity-50 hover:bg-surface-alt transition"
+          >
+            {savingAll ? "Upisujem…" : `Zapiši sve (${ready.length})`}
+          </button>
+        )}
+        {items.length > 0 && !busy && (
+          <button onClick={() => setItems([])} className="text-xs text-muted hover:text-risk transition-colors">
+            očisti listu
+          </button>
+        )}
+        {items.length > 0 && (
+          <span className="text-[12px] text-muted tabular ml-auto">
+            {items.length} {items.length === 1 ? "tiket" : "tiketa"} · upisano {done}
+            {scanning > 0 && ` · u redu ${scanning}`}
+          </span>
+        )}
+      </div>
 
-      {preview && (
-        <div className="mt-4 grid gap-4 sm:grid-cols-[180px_1fr]">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={preview} alt="Slikan tiket" className="rounded-lg border border-line max-h-56 object-contain bg-paper" />
+      {items.length > 0 && (
+        <div className="mt-5 space-y-3">
+          {items.map((it) => (
+            <TicketCard
+              key={it.id}
+              item={it}
+              cur={cur}
+              onStake={(v) => setItems((p) => p.map((x) => (x.id === it.id ? { ...x, stake: v } : x)))}
+              onResult={(v) => setItems((p) => p.map((x) => (x.id === it.id ? { ...x, result: v } : x)))}
+              onSave={async () => {
+                await saveOne(it);
+                await refresh();
+              }}
+              onRemove={() => setItems((p) => p.filter((x) => x.id !== it.id))}
+            />
+          ))}
+        </div>
+      )}
 
-          {ticket && (
+      {items.length > 0 && (
+        <p className="mt-4 text-[11px] text-muted">
+          Svaka slika je jedan poziv AI modela (troši kredit) — zato se čitaju redom, jedna po jedna.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function TicketCard({
+  item,
+  cur,
+  onStake,
+  onResult,
+  onSave,
+  onRemove,
+}: {
+  item: ScanItem;
+  cur: string;
+  onStake: (v: string) => void;
+  onResult: (v: "pending" | "won" | "lost") => void;
+  onSave: () => void;
+  onRemove: () => void;
+}) {
+  const legs = item.ticket?.legs.filter((l): l is Leg & { odds: number } => !!l.odds && l.odds > 1) ?? [];
+  const total = item.ticket?.totalOdds && item.ticket.totalOdds > 1 ? item.ticket.totalOdds : legs.length ? combinedOdds(legs) : 0;
+  const stakeNum = parseFloat(item.stake) || 0;
+
+  return (
+    <div className={`rounded-lg border p-3 ${item.status === "upisano" ? "border-good bg-good-bg/30" : item.status === "greska" ? "border-risk-line bg-risk-bg/30" : "border-line bg-paper"}`}>
+      <div className="grid gap-3 sm:grid-cols-[120px_1fr]">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={item.preview} alt={item.fileName} className="rounded border border-line max-h-32 w-full object-contain bg-surface" />
+
+        <div className="min-w-0">
+          {(item.status === "cekanje" || item.status === "citam") && (
+            <p className="text-sm text-muted">{item.status === "citam" ? "Čitam tiket…" : "Čeka u redu…"}</p>
+          )}
+          {item.status === "greska" && (
             <div>
-              {ticket.legs.length === 0 ? (
-                <p className="text-sm text-risk">{ticket.notes ?? "Nisam prepoznao tiket na slici."}</p>
+              <p className="text-sm text-risk">{item.error}</p>
+              <button onClick={onRemove} className="mt-1 text-[11px] text-muted hover:text-risk">ukloni</button>
+            </div>
+          )}
+
+          {(item.status === "gotovo" || item.status === "upisano") && item.ticket && (
+            <>
+              {legs.length === 0 ? (
+                <div>
+                  <p className="text-sm text-risk">{item.ticket.notes ?? "Nisam prepoznao tiket na slici."}</p>
+                  <button onClick={onRemove} className="mt-1 text-[11px] text-muted hover:text-risk">ukloni</button>
+                </div>
               ) : (
                 <>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-[11px] uppercase tracking-wide font-bold rounded px-2 py-0.5 bg-accent text-accent-contrast">Pročitano</span>
-                    {ticket.bookmaker && <span className="text-sm text-ink-soft">{ticket.bookmaker}</span>}
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm border-collapse">
-                      <thead>
-                        <tr className="text-left text-[11px] uppercase tracking-wide text-muted border-b border-line">
-                          <th className="py-1.5 pr-2 font-medium">Meč</th>
-                          <th className="py-1.5 px-2 font-medium">Igrano</th>
-                          <th className="py-1.5 pl-2 font-medium text-right">Kvota</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {ticket.legs.map((l, i) => (
-                          <tr key={i} className="border-b border-line/60">
-                            <td className="py-1.5 pr-2 text-ink-soft text-[13px]">{l.match}</td>
-                            <td className="py-1.5 px-2 text-ink font-medium text-[13px]">{l.pick}</td>
-                            <td className={`py-1.5 pl-2 text-right tabular text-[13px] ${l.odds ? "text-ink" : "text-risk"}`}>
-                              {l.odds ? l.odds.toFixed(2) : "nečitko"}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className={`text-[10px] uppercase tracking-wide font-bold rounded px-1.5 py-0.5 ${item.status === "upisano" ? "bg-good text-white" : "bg-accent text-accent-contrast"}`}>
+                      {item.status === "upisano" ? "Upisano ✓" : "Pročitano"}
+                    </span>
+                    {item.ticket.bookmaker && <span className="text-[13px] text-ink-soft">{item.ticket.bookmaker}</span>}
+                    <span className="text-[12px] text-muted tabular ml-auto">
+                      {legs.length === 1 ? "singl" : `${legs.length} para`} · kvota {total.toFixed(2)}
+                    </span>
                   </div>
 
-                  <div className="mt-3 flex flex-wrap items-end gap-3">
-                    <label className="block">
-                      <span className="block text-[11px] uppercase tracking-wide text-muted mb-1">Ulog ({cur})</span>
-                      <input
-                        type="number"
-                        value={stakeEdit}
-                        onChange={(e) => setStakeEdit(e.target.value)}
-                        className="w-28 rounded-md border border-line bg-paper px-2 py-1.5 text-sm text-ink tabular focus:outline-none focus:ring-2 focus:ring-accent"
-                      />
-                    </label>
-                    {ticket.totalOdds && (
-                      <p className="text-sm text-ink-soft tabular">
-                        Ukupna kvota <strong className="text-ink">{ticket.totalOdds.toFixed(2)}</strong>
-                      </p>
-                    )}
-                    {ticket.potentialPayout && (
-                      <p className="text-sm text-good tabular">
-                        Moguća isplata <strong>{formatMoney(ticket.potentialPayout, cur)}</strong>
-                      </p>
-                    )}
-                    <button
-                      onClick={save}
-                      disabled={status === "saved"}
-                      className="rounded-md bg-accent text-accent-contrast font-semibold text-sm px-4 py-2 disabled:opacity-50 hover:brightness-95 transition"
-                    >
-                      {status === "saved" ? "Zapisano ✓" : "Zapiši u istoriju"}
-                    </button>
-                  </div>
+                  <ul className="space-y-0.5 mb-2">
+                    {legs.map((l, i) => (
+                      <li key={i} className="text-[12px] flex items-baseline gap-1.5">
+                        <span className="font-medium text-ink">{l.pick}</span>
+                        <span className="tabular text-ink-soft">@{l.odds.toFixed(2)}</span>
+                        <span className="text-muted truncate">— {l.match}</span>
+                      </li>
+                    ))}
+                  </ul>
 
-                  {ticket.notes && <p className="mt-2 text-[11px] text-muted">Napomena modela: {ticket.notes}</p>}
-                  {ticket.legs.length > 1 && (
+                  {item.status !== "upisano" && (
+                    <div className="flex flex-wrap items-end gap-2">
+                      <label className="block">
+                        <span className="block text-[10px] uppercase tracking-wide text-muted mb-1">Ulog ({cur})</span>
+                        <input
+                          type="number"
+                          value={item.stake}
+                          onChange={(e) => onStake(e.target.value)}
+                          className="w-24 rounded border border-line bg-surface px-2 py-1 text-[13px] text-ink tabular focus:outline-none focus:ring-1 focus:ring-accent"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="block text-[10px] uppercase tracking-wide text-muted mb-1">Ishod tiketa</span>
+                        <select
+                          value={item.result}
+                          onChange={(e) => onResult(e.target.value as "pending" | "won" | "lost")}
+                          className={`rounded border border-line bg-surface px-2 py-1 text-[13px] focus:outline-none focus:ring-1 focus:ring-accent ${item.result === "won" ? "text-good" : item.result === "lost" ? "text-risk" : "text-ink"}`}
+                        >
+                          <option value="pending">još traje</option>
+                          <option value="won">dobitak ✓</option>
+                          <option value="lost">gubitak ✗</option>
+                        </select>
+                      </label>
+                      {stakeNum > 0 && (
+                        <p className="text-[12px] tabular pb-1.5">
+                          {item.result === "lost" ? (
+                            <span className="text-risk">−{formatMoney(stakeNum, cur)}</span>
+                          ) : (
+                            <span className="text-good">{item.result === "won" ? "+" : "ako prođe: +"}{formatMoney(stakeNum * (total - 1), cur)}</span>
+                          )}
+                        </p>
+                      )}
+                      <button
+                        onClick={onSave}
+                        disabled={!(stakeNum > 0)}
+                        className="ml-auto text-xs rounded-md bg-accent text-accent-contrast font-semibold px-3 py-1.5 disabled:opacity-50 hover:brightness-95 transition"
+                      >
+                        Zapiši
+                      </button>
+                    </div>
+                  )}
+
+                  {item.ticket.notes && item.status !== "upisano" && (
+                    <p className="mt-1.5 text-[11px] text-muted">Napomena: {item.ticket.notes}</p>
+                  )}
+                  {legs.length > 1 && item.status !== "upisano" && (
                     <p className="mt-1 text-[11px] text-muted">
-                      Kombinacija — čuva se kao <strong>jedan tiket</strong> (ukupna kvota{" "}
-                      {(ticket.totalOdds ?? combinedOdds(ticket.legs.filter((l): l is Leg & { odds: number } => !!l.odds))).toFixed(2)}).
-                      Ako <strong>bilo koji</strong> par padne, ceo tiket je izgubljen.
+                      Kombinacija — jedan tiket. Ako <strong>bilo koji</strong> par padne, ceo tiket je izgubljen.
                     </p>
                   )}
                 </>
               )}
-            </div>
+            </>
           )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
