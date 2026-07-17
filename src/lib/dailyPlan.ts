@@ -12,7 +12,8 @@ export type PlanPick = {
   opponent: string;
   modelProb: number;   // 0..1 — šansa da pick pobedi
   confidence: number;  // 0..1 — koliko se signali poklapaju
-  tier: "visok" | "srednji";
+  tier: "visok" | "srednji" | "nizak";
+  recommended: boolean; // da li prolazi naše kriterijume (ostali su popuna do 5)
   estOdds: number;     // PROCENA kvote (nemamo live kvote online)
   stake: number;       // predlog uloga (ravnomerno po tieru, ne Kelly — nema prave kvote)
   estProfit: number;   // approx dobitak ako prođe
@@ -30,9 +31,10 @@ function estimateOdds(prob: number): number {
 }
 
 /**
- * Bira 3–5 parova za dan. Online nemamo kvote, pa ne možemo računati pravi edge —
- * zato biramo mečeve u kojima se NAŠI signali najjače poklapaju (model + rang + podloga + forma)
- * i predlažemo ravnomeran ulog po tieru. Kvota i dobitak su PROCENA dok ne uneseš pravu kvotu.
+ * Bira do `maxPicks` (5) parova za dan — uvek daje najbolje što taj dan postoji,
+ * bez tvrdog odsecanja, ali svaki pick nosi `tier` i `recommended` da se odmah vidi
+ * koji prolaze kriterijume, a koji su samo popuna do pet.
+ * Online nemamo kvote, pa nema pravog edge-a: kvota i dobitak su PROCENA.
  */
 export function selectDailyPicks(
   candidates: { matchId: number; tournament: string; startTime: string; surface: Surface; a: Player; b: Player }[],
@@ -81,12 +83,13 @@ export function selectDailyPicks(
   });
 
   return scored
-    .filter((s) => s.confidence >= 0.45 && s.pFav >= 0.6)
     .sort((x, y) => y.confidence - x.confidence)
     .slice(0, maxPicks)
     .map((s) => {
-      const tier: PlanPick["tier"] = s.confidence >= 0.65 ? "visok" : "srednji";
-      const pctOfBankroll = tier === "visok" ? 0.02 : 0.0125;
+      // Kriterijum kvaliteta ostaje isti; slabiji pickovi se i dalje prikazuju, ali su jasno označeni.
+      const recommended = s.confidence >= 0.45 && s.pFav >= 0.6;
+      const tier: PlanPick["tier"] = s.confidence >= 0.65 ? "visok" : recommended ? "srednji" : "nizak";
+      const pctOfBankroll = tier === "visok" ? 0.02 : tier === "srednji" ? 0.0125 : 0.005;
       const stake = Math.max(0, Math.round((bankroll * pctOfBankroll) / 10) * 10);
       const estOdds = estimateOdds(s.pFav);
       return {
@@ -101,6 +104,7 @@ export function selectDailyPicks(
         modelProb: s.pFav,
         confidence: s.confidence,
         tier,
+        recommended,
         estOdds,
         stake,
         estProfit: Math.round(stake * (estOdds - 1)),

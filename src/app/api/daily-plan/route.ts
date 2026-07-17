@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { fetchEspnFixtures } from "@/lib/espn";
 import { fetchFixturesSmart } from "@/lib/fixturesSmart";
 import { buildPlayerIndex, matchFullName } from "@/lib/nameMatch";
 import { players } from "@/lib/ratings";
@@ -20,20 +21,49 @@ function belgradeDate(d = new Date()): string {
   return new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Belgrade" }).format(d);
 }
 
-async function buildPicksFor(dateStr: string, bankroll: number): Promise<PlanPick[]> {
+const MIN_PICKS = 5;
+
+/**
+ * Za listić nam treba raspored kroz VIŠE dana — ESPN ga daje (i lokalno i na hostingu),
+ * dok Sofascore vraća samo par najbližih mečeva. Sofascore ostaje fallback.
+ */
+async function fetchSchedule() {
+  try {
+    const { upcoming } = await fetchEspnFixtures();
+    if (upcoming.length > 0) return upcoming;
+  } catch {
+    /* pada na fallback ispod */
+  }
   const { upcoming } = await fetchFixturesSmart();
+  return upcoming;
+}
+
+async function buildPicksFor(dateStr: string, bankroll: number): Promise<PlanPick[]> {
+  const upcoming = await fetchSchedule();
   const index = buildPlayerIndex(players);
-  const candidates = upcoming
-    .filter((m) => new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Belgrade" }).format(new Date(m.startTime)) === dateStr)
+  const day = (iso: string) => new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Belgrade" }).format(new Date(iso));
+
+  const mapped = upcoming
     .map((m) => {
       const a = matchFullName(m.home.name, index);
       const b = matchFullName(m.away.name, index);
       if (!a || !b) return null;
       return { matchId: m.id, tournament: m.tournament, startTime: m.startTime, surface: surfaceGuess(m.tournament), a, b };
     })
-    .filter((x): x is NonNullable<typeof x> => x !== null);
+    .filter((x): x is NonNullable<typeof x> => x !== null)
+    .sort((x, y) => new Date(x.startTime).getTime() - new Date(y.startTime).getTime());
 
-  return selectDailyPicks(candidates, bankroll);
+  const sameDay = mapped.filter((m) => day(m.startTime) === dateStr);
+  let picks = selectDailyPicks(sameDay, bankroll, MIN_PICKS);
+
+  // Kad taj dan nema dovoljno mečeva (kasno je ili je slab raspored), dopuni iz narednih dana —
+  // UI prikazuje datum uz svaki pick, tako da se uvek zna šta je za kada.
+  if (picks.length < MIN_PICKS) {
+    const later = mapped.filter((m) => day(m.startTime) > dateStr);
+    const fill = selectDailyPicks(later, bankroll, MIN_PICKS - picks.length);
+    picks = [...picks, ...fill];
+  }
+  return picks;
 }
 
 /** GET ?date=YYYY-MM-DD — vrati sačuvan plan za dan; ako ga nema i dan je danas/sutra, generiši i zaključaj. */

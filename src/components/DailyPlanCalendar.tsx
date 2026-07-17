@@ -15,7 +15,8 @@ type PlanPick = {
   opponent: string;
   modelProb: number;
   confidence: number;
-  tier: "visok" | "srednji";
+  tier: "visok" | "srednji" | "nizak";
+  recommended: boolean;
   estOdds: number;
   stake: number;
   estProfit: number;
@@ -28,6 +29,8 @@ function belgradeDateStr(offsetDays = 0): string {
   const d = new Date(Date.now() + offsetDays * 86400000);
   return new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Belgrade" }).format(d);
 }
+
+const belgradeDateOf = (iso: string) => new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Belgrade" }).format(new Date(iso));
 
 const DAY_TABS = [
   { off: 0, label: "Danas" },
@@ -74,6 +77,13 @@ export default function DailyPlanCalendar({ onAnalyze }: { onAnalyze: (a: string
   const totalProfit = picks.reduce((s, p) => s + p.estProfit, 0);
   const bankrollNow = stats?.currentBankroll ?? 0;
   const isToday = dayOff === 0;
+  const recommended = picks.filter((p) => p.recommended);
+  const filled = picks.filter((p) => belgradeDateOf(p.startTime) !== dateStr).length;
+
+  // Ako se svih 5 stavi na JEDAN tiket: kvota se množi, ali se i šansa množi (tj. pada).
+  const allInOdds = picks.reduce((a, p) => a * p.estOdds, 1);
+  const allInProb = picks.reduce((a, p) => a * p.modelProb, 1);
+  const allInStake = Math.max(10, Math.round((bankrollNow * 0.02) / 10) * 10);
 
   return (
     <div className="rounded-xl border border-line bg-surface shadow-sm p-5">
@@ -123,6 +133,13 @@ export default function DailyPlanCalendar({ onAnalyze }: { onAnalyze: (a: string
         <p className="text-sm text-muted">{plan?.message ?? "Za ovaj dan nema mečeva koji prolaze naše kriterijume (ili feed još nema raspored)."}</p>
       )}
 
+      {filled > 0 && (
+        <p className="mb-3 text-[12px] rounded-md bg-surface-alt px-3 py-2 text-ink-soft">
+          ⓘ Ovaj dan nema dovoljno mečeva iz naše baze, pa je listić dopunjen sa{" "}
+          <strong>{filled} {filled === 1 ? "parom" : "parova"} iz narednih dana</strong> — datum piše uz vreme.
+        </p>
+      )}
+
       {picks.length > 0 && (
         <>
           <div className="overflow-x-auto">
@@ -146,6 +163,12 @@ export default function DailyPlanCalendar({ onAnalyze }: { onAnalyze: (a: string
                     <td className="py-2 pr-2 font-mono text-accent text-[12px]">{i + 1}</td>
                     <td className="py-2 px-2 text-[12px] text-muted whitespace-nowrap">
                       {new Date(p.startTime).toLocaleTimeString("sr-RS", { hour: "2-digit", minute: "2-digit" })}
+                      {/* Ako je par dopunjen iz drugog dana, datum mora da se vidi. */}
+                      {belgradeDateOf(p.startTime) !== dateStr && (
+                        <span className="block text-[10px] text-accent font-medium">
+                          {belgradeDateOf(p.startTime).slice(8, 10)}.{belgradeDateOf(p.startTime).slice(5, 7)}.
+                        </span>
+                      )}
                     </td>
                     <td className="py-2 px-2">
                       <p className="text-[13px] text-ink">{p.playerA} <span className="text-muted">vs</span> {p.playerB}</p>
@@ -153,7 +176,12 @@ export default function DailyPlanCalendar({ onAnalyze }: { onAnalyze: (a: string
                     </td>
                     <td className="py-2 px-2">
                       <span className="font-semibold text-ink text-[13px]">{p.pick}</span>
-                      <span className={`ml-1.5 text-[10px] rounded px-1.5 py-0.5 font-medium ${p.tier === "visok" ? "bg-good-bg text-good" : "bg-surface-alt text-ink-soft"}`}>
+                      <span
+                        className={`ml-1.5 text-[10px] rounded px-1.5 py-0.5 font-medium ${
+                          p.tier === "visok" ? "bg-good-bg text-good" : p.tier === "srednji" ? "bg-surface-alt text-ink-soft" : "bg-risk-bg text-risk"
+                        }`}
+                        title={p.recommended ? "Prolazi naše kriterijume" : "Ne prolazi kriterijume — tu je samo da popuni listu do 5"}
+                      >
                         {p.tier}
                       </span>
                     </td>
@@ -206,9 +234,52 @@ export default function DailyPlanCalendar({ onAnalyze }: { onAnalyze: (a: string
             </div>
           </div>
 
+          {/* Ako baš hoćeš sve na jedan tiket — evo šta to znači, bez ulepšavanja. */}
+          {picks.length >= 2 && (
+            <div className="mt-4 rounded-lg border border-risk-line bg-risk-bg/30 p-4">
+              <p className="text-[11px] uppercase tracking-wide text-muted mb-2">
+                Ako svih {picks.length} staviš na JEDAN tiket (kombinacija)
+              </p>
+              <div className="grid sm:grid-cols-4 gap-3">
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-muted">Ukupna kvota</p>
+                  <p className="font-display font-bold text-xl text-ink tabular" style={{ fontStretch: "85%" }}>{allInOdds.toFixed(2)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-muted">Ako prođe (ulog {allInStake})</p>
+                  <p className="font-display font-bold text-xl text-good tabular" style={{ fontStretch: "85%" }}>
+                    +{formatMoney(allInStake * (allInOdds - 1), cur)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-muted">Šansa da prođe</p>
+                  <p className={`font-display font-bold text-xl tabular ${allInProb >= 0.4 ? "text-ink" : "text-risk"}`} style={{ fontStretch: "85%" }}>
+                    {Math.round(allInProb * 100)}%
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-muted">Pada u</p>
+                  <p className="font-display font-bold text-xl text-risk tabular" style={{ fontStretch: "85%" }}>
+                    {Math.round((1 - allInProb) * 100)}%
+                  </p>
+                </div>
+              </div>
+              <p className="mt-2.5 text-[12px] text-ink-soft">
+                Svaki par ponaosob je verovatan, ali <strong>svi zajedno moraju proći</strong> — zato šansa pada na{" "}
+                {Math.round(allInProb * 100)}%. Backtest na 2.928 mečeva: kombinacija 3 para daje <strong className="text-risk">−19.8% ROI</strong>,
+                4 para <strong className="text-risk">−22.9%</strong>, dok isti pickovi kao singlovi daju −2.4%.{" "}
+                <a href="#alati" className="text-accent hover:underline">vidi „Koji sistem radi"</a>
+              </p>
+            </div>
+          )}
+
           <p className="mt-3 text-[11px] text-muted">
             Kvote su <strong>procena</strong> (nemamo live kvote na hostingu) — pravi iznos vidiš kad odigraš i slikaš tiket.
-            Ulog je ravnomeran po tieru (2% / 1.25% bankrolla), ne Kelly, jer bez prave kvote nema pravog edge-a. 18+.
+            Ulog je ravnomeran po tieru (2% / 1.25% / 0.5% bankrolla), ne Kelly, jer bez prave kvote nema pravog edge-a.
+            {recommended.length < picks.length && (
+              <> Pickovi označeni kao <strong>„nizak"</strong> ne prolaze naše kriterijume — tu su samo da popune listu do 5.</>
+            )}{" "}
+            18+.
           </p>
         </>
       )}

@@ -6,7 +6,7 @@ import { useBankroll, formatMoney } from "./BankrollContext";
 
 type Leg = { matchId: number; match: string; tournament: string; startTime: string; surface: Surface; pick: string; opponent: string; prob: number; odds: number };
 type Ticket = {
-  kind: "duplas" | "rizican";
+  kind: "duplas" | "rizican" | "pet";
   title: string;
   legs: Leg[];
   totalOdds: number;
@@ -46,8 +46,9 @@ export default function TicketsOfDay({ onAnalyze }: { onAnalyze: (a: string, b: 
         🎟️ Tiket dana — kombinacije
       </h3>
       <p className="text-sm text-muted mb-4 max-w-[70ch]">
-        Dva predloga: jedan da <strong>dupliraš</strong> (cilj kvota ~2.0) i jedan <strong>rizičan</strong> za veliku kvotu.
-        Uz svaki piše <strong>prava šansa da prođe</strong> — jer kombinacija je jedan tiket: padne li jedan par, pada sve.
+        Tri predloga: <strong>duplaš</strong> (cilj kvota ~2.0), <strong>rizičan</strong> za veliku kvotu, i{" "}
+        <strong>5 parova</strong> kako si tražio. Uz svaki piše <strong>prava šansa da prođe</strong> — jer kombinacija je
+        jedan tiket: padne li jedan par, pada sve.
       </p>
 
       {loading && <p className="text-sm text-muted">Sastavljam tikete…</p>}
@@ -64,7 +65,7 @@ export default function TicketsOfDay({ onAnalyze }: { onAnalyze: (a: string, b: 
           const stakeVal = stakes[key] ?? String(t.stake);
           const stakeNum = parseFloat(stakeVal) || 0;
           const ret = Math.round(stakeNum * t.totalOdds);
-          const isRisky = t.kind === "rizican";
+          const isRisky = t.kind === "rizican" || t.kind === "pet";
           return (
             <div key={key} className={`rounded-lg border p-4 ${isRisky ? "border-risk-line bg-risk-bg/30" : "border-accent/50 bg-paper"}`}>
               <div className="flex items-center justify-between mb-2">
@@ -126,7 +127,7 @@ export default function TicketsOfDay({ onAnalyze }: { onAnalyze: (a: string, b: 
                 <button
                   onClick={async () => {
                     await placeBet({
-                      matchLabel: `Kombinacija ${t.legs.length} para · ${t.kind === "duplas" ? "duplaš" : "rizičan"}`,
+                      matchLabel: `Kombinacija ${t.legs.length} para · ${t.kind === "duplas" ? "duplaš" : t.kind === "pet" ? "5 parova" : "rizičan"}`,
                       pick: t.legs.map((l) => l.pick).join(" + "),
                       odds: t.totalOdds,
                       stake: stakeNum,

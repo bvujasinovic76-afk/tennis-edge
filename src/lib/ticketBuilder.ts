@@ -20,7 +20,7 @@ export type CandidateLeg = {
 };
 
 export type BuiltTicket = {
-  kind: "duplas" | "rizican";
+  kind: "duplas" | "rizican" | "pet";
   title: string;
   legs: CandidateLeg[];
   totalOdds: number;
@@ -83,7 +83,9 @@ function assemble(kind: BuiltTicket["kind"], title: string, legs: CandidateLeg[]
   const ev = hitProb * totalOdds - 1; // po dinaru uloga
 
   let warning: string | null = null;
-  if (hitProb < 0.5 && kind === "duplas") {
+  if (kind === "pet") {
+    warning = `Šansa da prođe je ${Math.round(hitProb * 100)}% — pada u ${Math.round((1 - hitProb) * 100)}% slučajeva. Backtest na 2.928 mečeva: kombinacije 4+ para daju oko −23% ROI (isti pickovi kao singlovi: −2.4%). Ovo je tvoj izbor, ali podaci su protiv njega.`;
+  } else if (hitProb < 0.5 && kind === "duplas") {
     warning = `Šansa da prođe je ${Math.round(hitProb * 100)}% — kombinacija obara šansu, ovo NIJE siguran duplaš.`;
   } else if (kind === "rizican") {
     warning = `Šansa da prođe je samo ${Math.round(hitProb * 100)}% — očekuj da najčešće padne. Igraj mali ulog.`;
@@ -140,6 +142,22 @@ export function buildTicketsOfDay(
     tickets.push(assemble("rizican", "Rizičan — gađamo veliku kvotu", risky, Math.max(0, Math.round((bankroll * 0.005) / 10) * 10)));
   } else {
     notes.push("Rizičan tiket ne može da se sastavi — nema dovoljno mečeva iz naše baze danas.");
+  }
+
+  // Tiket od 5 parova — tražen izričito. Biramo 5 najverovatnijih favorita (najveća moguća šansa
+  // za tu formu), ali šansa i dalje pada jer svih 5 mora proći.
+  const petPool = all
+    .filter((l) => l.prob >= 0.5)
+    .sort((x, y) => y.prob - x.prob)
+    .reduce<CandidateLeg[]>((acc, l) => {
+      if (!acc.some((x) => x.matchId === l.matchId)) acc.push(l); // jedan meč = jedan par
+      return acc;
+    }, [])
+    .slice(0, 5);
+  if (petPool.length === 5) {
+    tickets.push(assemble("pet", "5 parova — kako si tražio", petPool, Math.max(0, Math.round((bankroll * 0.005) / 10) * 10)));
+  } else {
+    notes.push(`Tiket od 5 parova ne može danas — u našoj bazi ima samo ${petPool.length} ${petPool.length === 1 ? "meč" : "mečeva"} sa favoritom preko 50%.`);
   }
 
   return { tickets, notes };

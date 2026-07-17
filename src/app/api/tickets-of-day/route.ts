@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { fetchEspnFixtures } from "@/lib/espn";
 import { fetchFixturesSmart } from "@/lib/fixturesSmart";
 import { buildPlayerIndex, matchFullName } from "@/lib/nameMatch";
 import { players } from "@/lib/ratings";
@@ -24,16 +25,24 @@ export async function GET(req: NextRequest) {
 
   const dateStr = req.nextUrl.searchParams.get("date") || belgrade(new Date());
 
+  // ESPN nosi raspored kroz više dana (Sofascore samo najbliže) — bitno za sastavljanje kombinacija.
   let upcoming;
   try {
-    ({ upcoming } = await fetchFixturesSmart());
-  } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Feed nedostupan." }, { status: 502 });
+    ({ upcoming } = await fetchEspnFixtures());
+    if (upcoming.length === 0) ({ upcoming } = await fetchFixturesSmart());
+  } catch {
+    try {
+      ({ upcoming } = await fetchFixturesSmart());
+    } catch (err) {
+      return NextResponse.json({ error: err instanceof Error ? err.message : "Feed nedostupan." }, { status: 502 });
+    }
   }
 
   const index = buildPlayerIndex(players);
-  const matches = upcoming
-    .filter((m) => belgrade(new Date(m.startTime)) === dateStr)
+  const sameDay = upcoming.filter((m) => belgrade(new Date(m.startTime)) === dateStr);
+  // Ako je dan pri kraju (malo mečeva), dopuni narednim danima da kombinacija uopšte može da se sastavi.
+  const pool = sameDay.length >= 5 ? sameDay : upcoming.filter((m) => belgrade(new Date(m.startTime)) >= dateStr);
+  const matches = pool
     .map((m) => {
       const a = matchFullName(m.home.name, index);
       const b = matchFullName(m.away.name, index);
