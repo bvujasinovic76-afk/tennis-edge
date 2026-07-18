@@ -50,6 +50,7 @@ type SofaEvent = {
   roundInfo?: { name: string };
   status: { code: number; description: string; type: string };
   startTimestamp: number;
+  winnerCode?: number; // 1 = home, 2 = away (samo za završene)
   homeTeam: SofaTeam;
   awayTeam: SofaTeam;
   homeScore?: SofaScore;
@@ -101,6 +102,66 @@ type OddsMarket = {
   isLive?: boolean;
   choices?: { name: string; fractionalValue?: string }[];
 };
+
+// ---- Svetski pregled: SVI muški turniri koji se trenutno igraju (ATP/Masters + Challenger) ----
+
+// Sofascore kategorije: 3 = ATP (uključuje i Masters i Grand Slam), 72 = Challenger.
+const WORLD_CATEGORIES = [
+  { id: 3, label: "ATP" as const },
+  { id: 72, label: "Challenger" as const },
+];
+
+// Masters 1000 gradovi — za lepšu oznaku nivoa kad se igraju.
+const MASTERS_HINTS = ["indian wells", "miami", "monte carlo", "madrid", "rome", "toronto", "montreal", "canada", "cincinnati", "shanghai", "paris"];
+const SLAM_HINTS = ["australian open", "roland garros", "french open", "wimbledon", "us open"];
+
+export type WorldMatch = FixtureMatch & {
+  category: "ATP" | "Challenger";
+  tier: "Grand Slam" | "Masters" | "ATP" | "Challenger";
+  winner: "home" | "away" | null;
+};
+
+function tierOf(category: "ATP" | "Challenger", tournament: string): WorldMatch["tier"] {
+  if (category === "Challenger") return "Challenger";
+  const t = tournament.toLowerCase();
+  if (SLAM_HINTS.some((h) => t.includes(h))) return "Grand Slam";
+  if (MASTERS_HINTS.some((h) => t.includes(h))) return "Masters";
+  return "ATP";
+}
+
+function isSingles(e: SofaEvent): boolean {
+  return !e.tournament.name.toLowerCase().includes("doubles") && !e.homeTeam.name.includes("/") && !e.awayTeam.name.includes("/");
+}
+
+let worldCache: { key: string; data: WorldMatch[]; expiresAt: number } | null = null;
+
+/** Svi muški singl mečevi (ATP + Challenger) za dati dan, sa svih turnira na svetu. */
+export async function fetchWorldDay(dateStr: string): Promise<WorldMatch[]> {
+  if (worldCache && worldCache.key === dateStr && worldCache.expiresAt > Date.now()) return worldCache.data;
+
+  const results = await Promise.all(
+    WORLD_CATEGORIES.map(async (cat) => {
+      try {
+        const res = await sofaFetch<{ events: SofaEvent[] }>(`/category/${cat.id}/scheduled-events/${dateStr}`);
+        return (res.events ?? [])
+          .filter(isSingles)
+          .map((e): WorldMatch => ({
+            ...toFixture(e),
+            category: cat.label,
+            tier: tierOf(cat.label, e.tournament.name),
+            winner: e.winnerCode === 1 ? "home" : e.winnerCode === 2 ? "away" : null,
+          }));
+      } catch {
+        return [] as WorldMatch[]; // jedna kategorija sme da padne, druga i dalje vredi
+      }
+    })
+  );
+
+  const all = results.flat().sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+  if (all.length === 0) throw new Error("Sofascore trenutno nedostupan sa ovog servera.");
+  worldCache = { key: dateStr, data: all, expiresAt: Date.now() + 3 * 60 * 1000 };
+  return all;
+}
 
 /** Sofascore match-winner odds (their odds provider — a real independent market line, not our model). */
 export async function fetchEventOdds(eventId: number): Promise<{ home: number; away: number } | null> {
