@@ -81,7 +81,7 @@ export default function TournamentsWorld({ onAnalyze }: { onAnalyze: (a: string,
           )}
         </div>
         <div className="flex gap-1.5">
-          {[{ off: 0, label: "Danas" }, { off: 1, label: "Sutra" }].map((d) => (
+          {[{ off: -1, label: "Juče" }, { off: 0, label: "Danas" }, { off: 1, label: "Sutra" }].map((d) => (
             <button
               key={d.off}
               onClick={() => setDayOff(d.off)}
@@ -100,6 +100,8 @@ export default function TournamentsWorld({ onAnalyze }: { onAnalyze: (a: string,
           {data.hint && <p className="mt-1 text-[12px] text-ink-soft">{data.hint}</p>}
         </div>
       )}
+
+      {data && !data.error && <HitStats groups={data.groups} />}
 
       {data && !data.error && (
         <div className="space-y-2.5">
@@ -160,5 +162,99 @@ export default function TournamentsWorld({ onAnalyze }: { onAnalyze: (a: string,
         Elo bazi (uglavnom ATP nivo); za većinu challenger igrača nemamo istoriju pa procenat izostaje. Osvežava se na 60s.
       </p>
     </div>
+  );
+}
+
+/**
+ * 🎯 Pogoci modela — za svaki turnir posebno: koliko je završenih mečeva model pogodio
+ * (favorit po modelu je stvarno pobedio). Zeleno = pogođeno, crveno = promašeno.
+ * Računa se samo na mečevima gde su OBA igrača u našoj bazi (inače model nije ni birao).
+ */
+function HitStats({ groups }: { groups: Group[] }) {
+  type Row = { tournament: string; tier: Group["tier"]; hits: number; total: number };
+  const rows: Row[] = [];
+  let allHits = 0;
+  let allTotal = 0;
+
+  for (const g of groups) {
+    let hits = 0;
+    let total = 0;
+    for (const m of g.matches) {
+      if (m.statusType !== "finished" || m.winner == null || m.modelHomePct == null) continue;
+      const modelPickedHome = m.modelHomePct >= 50;
+      const hit = (modelPickedHome && m.winner === "home") || (!modelPickedHome && m.winner === "away");
+      total += 1;
+      if (hit) hits += 1;
+    }
+    if (total > 0) {
+      rows.push({ tournament: g.tournament, tier: g.tier, hits, total });
+      allHits += hits;
+      allTotal += total;
+    }
+  }
+
+  if (allTotal === 0) return null;
+  rows.sort((a, b) => b.total - a.total);
+
+  return (
+    <div className="mb-4 rounded-lg border border-line bg-paper p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+        <p className="text-[11px] uppercase tracking-wide text-muted">🎯 Pogoci modela — po turniru (završeni mečevi)</p>
+        <div className="flex items-center gap-3 text-[11px] text-ink-soft">
+          <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm" style={{ background: "var(--good)" }} /> pogođeno</span>
+          <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm" style={{ background: "var(--risk)" }} /> promašeno</span>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-start gap-x-6 gap-y-4">
+        {/* ukupno za dan */}
+        <div className="flex flex-col items-center">
+          <Donut hits={allHits} total={allTotal} size={84} />
+          <p className="mt-1 text-[12px] font-semibold text-ink">Ukupno</p>
+          <p className="text-[11px] text-muted tabular">{allHits}/{allTotal} · {Math.round((allHits / allTotal) * 100)}%</p>
+        </div>
+        {/* po turniru */}
+        {rows.map((r) => (
+          <div key={r.tournament} className="flex flex-col items-center max-w-[110px]">
+            <Donut hits={r.hits} total={r.total} size={64} />
+            <p className="mt-1 text-[11px] font-medium text-ink text-center leading-tight">{r.tournament.replace(", Qualifying", " (kv.)")}</p>
+            <p className="text-[10px] text-muted tabular">{r.hits}/{r.total} · {Math.round((r.hits / r.total) * 100)}%</p>
+          </div>
+        ))}
+      </div>
+      <p className="mt-3 text-[11px] text-muted">
+        „Pogođeno" = favorit po našem Elo modelu je stvarno pobedio. Broje se samo mečevi gde su oba igrača u našoj bazi.
+      </p>
+    </div>
+  );
+}
+
+/** Donut: zeleni luk = pogoci, crveni = promašaji, u sredini odnos. */
+function Donut({ hits, total, size }: { hits: number; total: number; size: number }) {
+  const stroke = Math.max(7, Math.round(size / 8));
+  const r = (size - stroke) / 2;
+  const C = 2 * Math.PI * r;
+  const frac = total > 0 ? hits / total : 0;
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label={`Pogođeno ${hits} od ${total}`}>
+      {/* crvena osnova (promašaji) pa zeleni luk preko (pogoci), počinje od vrha */}
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--risk)" strokeWidth={stroke} opacity={0.85} />
+      {frac > 0 && (
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          stroke="var(--good)"
+          strokeWidth={stroke}
+          strokeDasharray={`${C * frac} ${C * (1 - frac)}`}
+          strokeLinecap={frac < 1 ? "butt" : "round"}
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
+        />
+      )}
+      <text x="50%" y="50%" textAnchor="middle" dominantBaseline="central" fontSize={size / 4.2} fontWeight="700" fill="var(--ink)" className="tabular">
+        {hits}/{total}
+      </text>
+    </svg>
   );
 }
