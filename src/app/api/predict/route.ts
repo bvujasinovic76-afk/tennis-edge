@@ -16,6 +16,10 @@ export async function POST(req: NextRequest) {
   }
 
   const { playerAName, playerBName, surface, oddsA, oddsB } = body;
+  // Izbor agenata: ako je prosleđena lista, zovemo samo njih (jeftinije i brže).
+  const wanted = Array.isArray((body as { personas?: string[] }).personas) ? (body as { personas?: string[] }).personas! : null;
+  const activePersonas = wanted && wanted.length > 0 ? PERSONAS.filter((p) => wanted.includes(p.id)) : PERSONAS;
+  const partial = activePersonas.length !== PERSONAS.length;
   const playerA = players.find((p) => p.name === playerAName);
   const playerB = players.find((p) => p.name === playerBName);
   if (!playerA || !playerB) {
@@ -28,10 +32,12 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Keš: ako je isti meč analiziran u poslednjih 24h, vrati arhiviranu analizu (0 kredita).
-  const cached = await findCached("council", playerA.name, playerB.name, surface);
-  if (cached) {
-    return NextResponse.json({ ...(cached.payload as PredictResponse), cached: true, cachedAt: cached.createdAt });
+  // Keš: samo za pun konzilijum — delimičan izbor agenata se uvek računa iznova.
+  if (!partial) {
+    const cached = await findCached("council", playerA.name, playerB.name, surface);
+    if (cached) {
+      return NextResponse.json({ ...(cached.payload as PredictResponse), cached: true, cachedAt: cached.createdAt });
+    }
   }
 
   const ra = blendedRating(playerA, surface);
@@ -57,7 +63,7 @@ VAŽNO — realan track record ovog Elo modela: u walk-forward backtestu protiv 
 
   try {
     const personaResults: PersonaResult[] = await Promise.all(
-      PERSONAS.map(async (persona) => {
+      activePersonas.map(async (persona) => {
         try {
           const parsed = await callModelJson<{ pick: "A" | "B"; confidence: number; stake: PersonaResult["stake"]; reasoning: string }>({
             model: persona.model,
@@ -86,43 +92,63 @@ VAŽNO — realan track record ovog Elo modela: u walk-forward backtestu protiv 
       .map((p) => `- ${p.name} (${p.model}): pick ${p.pick === "A" ? playerA.name : playerB.name}, poverenje ${p.confidence}%, ulog "${p.stake}". Obrazloženje: ${p.reasoning}`)
       .join("\n")}`;
 
-    let judge: JudgeResult;
-    try {
-      judge = await callModelJson<JudgeResult>({
-        model: JUDGE_MODEL,
-        systemPrompt: JUDGE_SYSTEM_PROMPT,
-        userPrompt: judgeUserPrompt,
-        temperature: 0.2,
-      });
-    } catch (err) {
-      judge = { scores: [], contradictions: [], error: err instanceof OpenRouterError ? err.message : "Nepoznata greška." };
+    // Sudija i finale imaju smisla tek kad ima šta da se poredi — sa jednim agentom se preskaču
+    // (nema kontradikcija ni vaganja mišljenja), pa se ne troši kredit bez potrebe.
+    const needsJudging = usablePersonas.length >= 2;
+
+    let judge: JudgeResult = { scores: [], contradictions: [] };
+    if (needsJudging) {
+      try {
+        judge = await callModelJson<JudgeResult>({
+          model: JUDGE_MODEL,
+          systemPrompt: JUDGE_SYSTEM_PROMPT,
+          userPrompt: judgeUserPrompt,
+          temperature: 0.2,
+        });
+      } catch (err) {
+        judge = { scores: [], contradictions: [], error: err instanceof OpenRouterError ? err.message : "Nepoznata greška." };
+      }
     }
 
     const synthesizerUserPrompt = `${judgeUserPrompt}\n\nOcene sudije:\n${JSON.stringify(judge)}`;
 
     let final: FinalVerdict;
-    try {
-      final = await callModelJson<FinalVerdict>({
-        model: SYNTHESIZER_MODEL,
-        systemPrompt: SYNTHESIZER_SYSTEM_PROMPT,
-        userPrompt: synthesizerUserPrompt,
-        temperature: 0.4,
-      });
-    } catch (err) {
-      final = {
-        finalPick: "A",
-        confidence: 0,
-        staking: "none",
-        keyFactors: [],
-        narrative: "",
-        error: err instanceof OpenRouterError ? err.message : "Nepoznata greška.",
-      };
+    if (!needsJudging) {
+      // Jedan agent = njegov stav JE zaključak; ne izmišljamo "sintezu" jednog mišljenja.
+      const only = usablePersonas[0];
+      final = only
+        ? {
+            finalPick: only.pick,
+            confidence: only.confidence,
+            staking: only.stake,
+            keyFactors: [`Mišljenje samo jednog analitičara (${only.name}) — nema unakrsne provere.`],
+            narrative: only.reasoning,
+          }
+        : { finalPick: "A", confidence: 0, staking: "none", keyFactors: [], narrative: "", error: "Nijedan agent nije uspeo." };
+    } else {
+      try {
+        final = await callModelJson<FinalVerdict>({
+          model: SYNTHESIZER_MODEL,
+          systemPrompt: SYNTHESIZER_SYSTEM_PROMPT,
+          userPrompt: synthesizerUserPrompt,
+          temperature: 0.4,
+        });
+      } catch (err) {
+        final = {
+          finalPick: "A",
+          confidence: 0,
+          staking: "none",
+          keyFactors: [],
+          narrative: "",
+          error: err instanceof OpenRouterError ? err.message : "Nepoznata greška.",
+        };
+      }
     }
 
     const response: PredictResponse = { playerA: playerA.name, playerB: playerB.name, personas: personaResults, judge, final };
 
-    // Sačuvaj u arhivu (samo uspešne — bar jedan analitičar + finale bez greške).
-    if (!final.error && personaResults.some((p) => !p.error)) {
+    // U arhivu ide samo pun konzilijum — delimičan izbor ne sme da zatruje keš.
+    if (!partial && !final.error && personaResults.some((p) => !p.error)) {
       const supabase = await createClient();
       const { data: { user } } = await supabase.auth.getUser();
       await saveAnalysis("council", playerA.name, playerB.name, surface, response, user?.id ?? null).catch(() => {});

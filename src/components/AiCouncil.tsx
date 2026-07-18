@@ -10,6 +10,15 @@ const SURFACES: Surface[] = ["Hard", "Clay", "Grass"];
 const SURFACE_LABEL: Record<Surface, string> = { Hard: "Tvrda podloga", Clay: "Šljaka", Grass: "Trava" };
 const STAKE_LABEL: Record<Stake, string> = { none: "bez uloga", low: "nizak ulog", medium: "srednji ulog", high: "visok ulog" };
 
+// Izbor analitičara — možeš zvati sve ili samo one koji ti trebaju (svaki košta kredit).
+const PERSONA_OPTIONS: { id: string; name: string }[] = [
+  { id: "kriticar", name: "Kritičar" },
+  { id: "sigurica", name: "Sigurica" },
+  { id: "rizikas", name: "Rizikaš" },
+  { id: "matematicar", name: "Matematičar" },
+  { id: "statisticar", name: "Statističar" },
+];
+
 type Status = "idle" | "loading" | "done" | "error";
 
 export default function AiCouncil({
@@ -32,11 +41,26 @@ export default function AiCouncil({
   const [status, setStatus] = useState<Status>("idle");
   const [result, setResult] = useState<PredictResponse | null>(null);
   const [error, setError] = useState<string>("");
+  // Podrazumevano svih 5; korisnik može da isključi bilo kog.
+  const [selected, setSelected] = useState<Set<string>>(new Set(PERSONA_OPTIONS.map((p) => p.id)));
 
   const playerA = byName.get(nameA);
   const playerB = byName.get(nameB);
 
+  function toggle(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
   async function runCouncil() {
+    if (selected.size === 0) {
+      setError("Izaberi bar jednog analitičara.");
+      return;
+    }
     setStatus("loading");
     setError("");
     setResult(null);
@@ -50,6 +74,7 @@ export default function AiCouncil({
           surface,
           oddsA: oddsA ? parseFloat(oddsA) : undefined,
           oddsB: oddsB ? parseFloat(oddsB) : undefined,
+          personas: selected.size < PERSONA_OPTIONS.length ? [...selected] : undefined,
         }),
       });
       const data = await res.json();
@@ -88,12 +113,45 @@ export default function AiCouncil({
         <OddsInput label={`Kvota — ${playerB?.name ?? "Igrač B"} (opciono)`} value={oddsB} onChange={setOddsB} />
       </div>
 
+      {/* Izbor analitičara — klikni da uključiš/isključiš; možeš pozvati i samo jednog */}
+      <div className="mt-5">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs uppercase tracking-wide text-muted">Ko analizira ({selected.size}/5)</p>
+          <button
+            onClick={() => setSelected(new Set(selected.size === PERSONA_OPTIONS.length ? [] : PERSONA_OPTIONS.map((p) => p.id)))}
+            className="text-[11px] text-accent hover:underline"
+          >
+            {selected.size === PERSONA_OPTIONS.length ? "poništi sve" : "izaberi sve"}
+          </button>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {PERSONA_OPTIONS.map((p) => {
+            const on = selected.has(p.id);
+            return (
+              <button
+                key={p.id}
+                onClick={() => toggle(p.id)}
+                className={`text-xs rounded-full px-3 py-1.5 border transition-colors ${
+                  on ? "bg-accent text-accent-contrast border-accent" : "bg-paper text-muted border-line hover:border-accent"
+                }`}
+              >
+                {on ? "✓ " : ""}{p.name}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       <button
         onClick={runCouncil}
         disabled={status === "loading" || !playerA || !playerB}
-        className="mt-5 w-full sm:w-auto rounded-md bg-accent text-accent-contrast font-semibold text-sm px-5 py-2.5 disabled:opacity-50 hover:brightness-95 transition"
+        className="mt-4 w-full sm:w-auto rounded-md bg-accent text-accent-contrast font-semibold text-sm px-5 py-2.5 disabled:opacity-50 hover:brightness-95 transition"
       >
-        {status === "loading" ? "Konzilijum radi… (5 analitičara + sudija + finale)" : "Generiši AI konzilijum"}
+        {status === "loading"
+          ? `Radi… (${selected.size} ${selected.size === 1 ? "analitičar" : "analitičara"}${selected.size >= 2 ? " + sudija + finale" : ""})`
+          : selected.size === PERSONA_OPTIONS.length
+          ? "Generiši AI konzilijum"
+          : `Pozovi ${selected.size} ${selected.size === 1 ? "analitičara" : "analitičara"}`}
       </button>
 
       {status === "error" && (

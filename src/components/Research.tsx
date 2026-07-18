@@ -9,6 +9,12 @@ type AgentResult = { id: string; name: string; model: string; content: string; c
 type Synth = { headline: string; signals: string[]; risk: "low" | "medium" | "high"; recommendation: string; error?: string };
 type ResearchResponse = { playerA: string; playerB: string; agents: AgentResult[]; synth: Synth; cached?: boolean; cachedAt?: string };
 
+const AGENT_OPTIONS: { id: string; name: string }[] = [
+  { id: "povrede", name: "Povrede i vesti" },
+  { id: "kvote", name: "Srpske kvote" },
+  { id: "forumi", name: "Forumi i sentiment" },
+];
+
 const RISK_LABEL: Record<Synth["risk"], string> = { low: "nizak rizik", medium: "srednji rizik", high: "visok rizik" };
 const RISK_TONE: Record<Synth["risk"], string> = { low: "bg-good-bg text-good", medium: "bg-surface-alt text-ink-soft", high: "bg-risk-bg text-risk" };
 
@@ -30,8 +36,23 @@ export default function Research({
   const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [result, setResult] = useState<ResearchResponse | null>(null);
   const [error, setError] = useState("");
+  const [selected, setSelected] = useState<Set<string>>(new Set(AGENT_OPTIONS.map((a) => a.id)));
+
+  function toggle(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   async function run() {
+    if (selected.size === 0) {
+      setError("Izaberi bar jednog agenta.");
+      setStatus("error");
+      return;
+    }
     setStatus("loading");
     setError("");
     setResult(null);
@@ -39,7 +60,13 @@ export default function Research({
       const res = await fetch("/api/research", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ playerA: nameA, playerB: nameB, surface, tournament }),
+        body: JSON.stringify({
+          playerA: nameA,
+          playerB: nameB,
+          surface,
+          tournament,
+          agents: selected.size < AGENT_OPTIONS.length ? [...selected] : undefined,
+        }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
@@ -79,12 +106,35 @@ export default function Research({
         </div>
       </div>
 
+      {/* Izbor agenata — možeš pozvati samo onog koji ti treba (svaka pretraga košta) */}
+      <div className="mt-5">
+        <p className="text-xs uppercase tracking-wide text-muted mb-2">Ko istražuje ({selected.size}/3)</p>
+        <div className="flex flex-wrap gap-1.5">
+          {AGENT_OPTIONS.map((a) => {
+            const on = selected.has(a.id);
+            return (
+              <button
+                key={a.id}
+                onClick={() => toggle(a.id)}
+                className={`text-xs rounded-full px-3 py-1.5 border transition-colors ${
+                  on ? "bg-accent text-accent-contrast border-accent" : "bg-paper text-muted border-line hover:border-accent"
+                }`}
+              >
+                {on ? "✓ " : ""}{a.name}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       <button
         onClick={run}
         disabled={status === "loading" || !nameA || !nameB}
-        className="mt-5 w-full sm:w-auto rounded-md bg-accent text-accent-contrast font-semibold text-sm px-5 py-2.5 disabled:opacity-50 hover:brightness-95 transition"
+        className="mt-4 w-full sm:w-auto rounded-md bg-accent text-accent-contrast font-semibold text-sm px-5 py-2.5 disabled:opacity-50 hover:brightness-95 transition"
       >
-        {status === "loading" ? "Agenti pretražuju internet… (~30-60s)" : "Pokreni istraživanje (3 agenta uživo)"}
+        {status === "loading"
+          ? "Agenti pretražuju internet… (~30-60s)"
+          : `Pokreni istraživanje (${selected.size} ${selected.size === 1 ? "agent" : "agenta"})`}
       </button>
 
       {status === "error" && <div className="mt-4 rounded-md border border-risk-line bg-risk-bg px-4 py-3 text-sm text-risk">{error}</div>}

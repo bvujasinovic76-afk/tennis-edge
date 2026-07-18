@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { Player, Surface } from "@/lib/elo";
 import { BankrollProvider } from "./BankrollContext";
 import Dashboard from "./Dashboard";
+import ChatAssistant from "./ChatAssistant";
 import DailyPlanCalendar from "./DailyPlanCalendar";
 import TicketsOfDay from "./TicketsOfDay";
 import TicketScan from "./TicketScan";
@@ -38,6 +39,7 @@ export default function Workbench({ players }: { players: Player[] }) {
     <BankrollProvider>
       <section className="py-8 space-y-6">
         <Dashboard players={players} onAnalyze={handlePick} />
+        <ChatAssistant />
         <TicketsOfDay onAnalyze={handlePick} />
         <DailyPlanCalendar onAnalyze={handlePick} />
         <TicketScan />
