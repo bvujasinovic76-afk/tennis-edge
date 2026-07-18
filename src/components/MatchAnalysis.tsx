@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import type { Player, Surface } from "@/lib/elo";
 import { buildNarrative } from "@/lib/narrative";
+import { marketsForMatch } from "@/lib/markets";
 import PlayerCombobox from "./PlayerCombobox";
 
 const SURFACE_LABEL: Record<Surface, string> = { Hard: "Tvrda podloga", Clay: "Šljaka", Grass: "Trava" };
@@ -120,6 +121,35 @@ export default function MatchAnalysis({
               </table>
             </div>
             <p className="mt-2 text-[11px] text-muted">Zeleno = bolji u toj kategoriji. Zlatno = favorit po modelu.</p>
+
+            {/* Tipovi sa STVARNOM istorijskom prolaznošću za ovako jak/tesан meč */}
+            <p className="text-xs uppercase tracking-wide text-muted mt-5 mb-2">Tipovi — istorijska prolaznost</p>
+            <div className="rounded-lg border border-line overflow-hidden">
+              <table className="w-full text-[12px] border-collapse">
+                <tbody>
+                  {marketsForMatch(
+                    result.pFav,
+                    result.favSide === "A" ? a.name : b.name,
+                    result.favSide === "A" ? b.name : a.name
+                  ).map((m) => (
+                    <tr key={m.id} className="border-t border-line/60 first:border-t-0 bg-surface">
+                      <td className="px-2.5 py-1.5 text-ink-soft">
+                        {m.safest && <span className="text-accent font-bold mr-1">★</span>}
+                        {m.label}
+                      </td>
+                      <td className={`px-2.5 py-1.5 text-right tabular font-semibold ${m.passPct >= 80 ? "text-good" : m.passPct < 50 ? "text-risk" : "text-ink"}`}>
+                        {m.passPct}%
+                      </td>
+                      <td className="px-2.5 py-1.5 text-right tabular text-muted">~{m.estOdds.toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="mt-1.5 text-[11px] text-muted">
+              Prolaznost = koliko je taj tip stvarno prolazio u sličnim mečevima (uzorak ~
+              {marketsForMatch(result.pFav, "x", "y")[0].sample.toLocaleString("sr-RS")}). ★ = najsigurniji.
+            </p>
           </div>
         </div>
       )}

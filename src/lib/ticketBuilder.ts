@@ -1,5 +1,6 @@
 import type { Player, Surface } from "./elo";
 import { blendedRating, expectedProb } from "./elo";
+import { safestMarket } from "./markets";
 
 // Gradi "tiket dana" — kombinaciju parova koja pogađa ciljanu ukupnu kvotu.
 // Ključno: uz svaki tiket ide POŠTENA šansa da prođe (proizvod verovatnoća svih parova),
@@ -20,7 +21,7 @@ export type CandidateLeg = {
 };
 
 export type BuiltTicket = {
-  kind: "duplas" | "rizican" | "pet";
+  kind: "duplas" | "rizican" | "pet" | "setovi";
   title: string;
   legs: CandidateLeg[];
   totalOdds: number;
@@ -83,7 +84,9 @@ function assemble(kind: BuiltTicket["kind"], title: string, legs: CandidateLeg[]
   const ev = hitProb * totalOdds - 1; // po dinaru uloga
 
   let warning: string | null = null;
-  if (kind === "pet") {
+  if (kind === "setovi") {
+    warning = `Prolaznosti su iz ~9.500 stvarnih mečeva — ovo je istorijski najprolazniji tip forme, ali kvote su male pa je i dobitak mali. Tikete sa setovima obeležavaš ručno.`;
+  } else if (kind === "pet") {
     warning = `Šansa da prođe je ${Math.round(hitProb * 100)}% — pada u ${Math.round((1 - hitProb) * 100)}% slučajeva. Backtest na 2.928 mečeva: kombinacije 4+ para daju oko −23% ROI (isti pickovi kao singlovi: −2.4%). Ovo je tvoj izbor, ali podaci su protiv njega.`;
   } else if (hitProb < 0.5 && kind === "duplas") {
     warning = `Šansa da prođe je ${Math.round(hitProb * 100)}% — kombinacija obara šansu, ovo NIJE siguran duplaš.`;
@@ -142,6 +145,27 @@ export function buildTicketsOfDay(
     tickets.push(assemble("rizican", "Rizičan — gađamo veliku kvotu", risky, Math.max(0, Math.round((bankroll * 0.005) / 10) * 10)));
   } else {
     notes.push("Rizičan tiket ne može da se sastavi — nema dovoljno mečeva iz naše baze danas.");
+  }
+
+  // "Sigurniji — setovi": 2-3 najjača favorita, ali tip je "uzima bar set" umesto pobede.
+  // Istorijski NAJPROLAZNIJA forma (fav uzima set prolazi 73-95% zavisno od jačine).
+  const setPool = all
+    .filter((l) => l.prob >= 0.62)
+    .sort((x, y) => y.prob - x.prob)
+    .reduce<CandidateLeg[]>((acc, l) => {
+      if (!acc.some((x) => x.matchId === l.matchId)) acc.push(l);
+      return acc;
+    }, [])
+    .slice(0, 3);
+  if (setPool.length >= 2) {
+    const setLegs: CandidateLeg[] = setPool.map((l) => {
+      const m = safestMarket(l.prob, l.pick, l.opponent);
+      // safestMarket za jake favorite vraća "uzima set"; prob = istorijska prolaznost
+      return { ...l, pick: m.pickText, prob: m.passPct / 100, odds: m.estOdds };
+    });
+    tickets.push(assemble("setovi", "Sigurniji — favoriti uzimaju set", setLegs, Math.max(0, Math.round((bankroll * 0.02) / 10) * 10)));
+  } else {
+    notes.push("Set-tiket ne može danas — treba bar 2 favorita preko 62% u našoj bazi.");
   }
 
   // Tiket od 5 parova — tražen izričito. Biramo 5 najverovatnijih favorita (najveća moguća šansa

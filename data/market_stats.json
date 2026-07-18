@@ -1,0 +1,94 @@
+{
+  "generatedFrom": "tennis-data.co.uk ATP Bo3 completed matches 2022-2026, pre-match model bands (chronological)",
+  "note": "Prolaznosti su STVARNE istorijske frekvencije, ne procene. Kvote za ove tipove nemamo u podacima — u aplikaciji su procena od fer kvote.",
+  "bands": [
+    {
+      "lo": 0.5,
+      "hi": 0.55,
+      "n": 2902,
+      "favWinPct": 54.4,
+      "favSetPct": 72.9,
+      "dogSetPct": 65.8,
+      "over215Pct": 56.8,
+      "over225Pct": 48.7,
+      "avgGames": 23.8
+    },
+    {
+      "lo": 0.55,
+      "hi": 0.6,
+      "n": 2194,
+      "favWinPct": 57.9,
+      "favSetPct": 74.7,
+      "dogSetPct": 63.8,
+      "over215Pct": 58.4,
+      "over225Pct": 49.4,
+      "avgGames": 24.0
+    },
+    {
+      "lo": 0.6,
+      "hi": 0.65,
+      "n": 1510,
+      "favWinPct": 61.7,
+      "favSetPct": 77.5,
+      "dogSetPct": 58.3,
+      "over215Pct": 53.4,
+      "over225Pct": 46.1,
+      "avgGames": 23.5
+    },
+    {
+      "lo": 0.65,
+      "hi": 0.7,
+      "n": 1054,
+      "favWinPct": 68.5,
+      "favSetPct": 82.1,
+      "dogSetPct": 52.5,
+      "over215Pct": 53.8,
+      "over225Pct": 43.9,
+      "avgGames": 23.4
+    },
+    {
+      "lo": 0.7,
+      "hi": 0.75,
+      "n": 780,
+      "favWinPct": 72.6,
+      "favSetPct": 85.3,
+      "dogSetPct": 49.2,
+      "over215Pct": 53.8,
+      "over225Pct": 45.4,
+      "avgGames": 23.4
+    },
+    {
+      "lo": 0.75,
+      "hi": 0.8,
+      "n": 511,
+      "favWinPct": 77.3,
+      "favSetPct": 87.5,
+      "dogSetPct": 46.4,
+      "over215Pct": 52.6,
+      "over225Pct": 44.0,
+      "avgGames": 23.3
+    },
+    {
+      "lo": 0.8,
+      "hi": 0.85,
+      "n": 299,
+      "favWinPct": 81.3,
+      "favSetPct": 92.6,
+      "dogSetPct": 39.5,
+      "over215Pct": 49.8,
+      "over225Pct": 43.8,
+      "avgGames": 23.3
+    },
+    {
+      "lo": 0.85,
+      "hi": 1.01,
+      "n": 256,
+      "favWinPct": 89.1,
+      "favSetPct": 94.9,
+      "dogSetPct": 27.7,
+      "over215Pct": 37.5,
+      "over225Pct": 31.2,
+      "avgGames": 21.4
+    }
+  ]
+}

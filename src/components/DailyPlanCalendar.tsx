@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { Surface } from "@/lib/elo";
+import { marketsForMatch, type MarketId } from "@/lib/markets";
 import { useBankroll, formatMoney } from "./BankrollContext";
 
 type PlanPick = {
@@ -45,6 +46,8 @@ export default function DailyPlanCalendar({ onAnalyze }: { onAnalyze: (a: string
   const [loading, setLoading] = useState(false);
   const [regen, setRegen] = useState(false);
   const [placed, setPlaced] = useState<Record<number, boolean>>({});
+  // Izabrani tip po meču — podrazumevano konačan ishod ("win").
+  const [chosenMarket, setChosenMarket] = useState<Record<number, MarketId>>({});
 
   const dateStr = belgradeDateStr(dayOff);
 
@@ -149,7 +152,7 @@ export default function DailyPlanCalendar({ onAnalyze }: { onAnalyze: (a: string
                   <th className="py-2 pr-2 font-medium">#</th>
                   <th className="py-2 px-2 font-medium">Vreme</th>
                   <th className="py-2 px-2 font-medium">Meč / zašto</th>
-                  <th className="py-2 px-2 font-medium">Igramo</th>
+                  <th className="py-2 px-2 font-medium">Tip (★ = najsigurniji)</th>
                   <th className="py-2 px-2 font-medium text-right">Model</th>
                   <th className="py-2 px-2 font-medium text-right">Kvota ~</th>
                   <th className="py-2 px-2 font-medium text-right">Ulog</th>
@@ -158,7 +161,12 @@ export default function DailyPlanCalendar({ onAnalyze }: { onAnalyze: (a: string
                 </tr>
               </thead>
               <tbody>
-                {picks.map((p, i) => (
+                {picks.map((p, i) => {
+                  // Tipovi sa STVARNOM istorijskom prolaznošću za ovako jakog favorita.
+                  const opts = marketsForMatch(p.modelProb, p.pick, p.opponent);
+                  const chosen = opts.find((o) => o.id === (chosenMarket[p.matchId] ?? "win")) ?? opts[0];
+                  const profit = Math.round(p.stake * (chosen.estOdds - 1));
+                  return (
                   <tr key={p.matchId} className="border-b border-line/60">
                     <td className="py-2 pr-2 font-mono text-accent text-[12px]">{i + 1}</td>
                     <td className="py-2 px-2 text-[12px] text-muted whitespace-nowrap">
@@ -171,24 +179,41 @@ export default function DailyPlanCalendar({ onAnalyze }: { onAnalyze: (a: string
                       )}
                     </td>
                     <td className="py-2 px-2">
-                      <p className="text-[13px] text-ink">{p.playerA} <span className="text-muted">vs</span> {p.playerB}</p>
+                      <p className="text-[13px] text-ink">
+                        {p.playerA} <span className="text-muted">vs</span> {p.playerB}
+                        <span
+                          className={`ml-1.5 text-[10px] rounded px-1.5 py-0.5 font-medium ${
+                            p.tier === "visok" ? "bg-good-bg text-good" : p.tier === "srednji" ? "bg-surface-alt text-ink-soft" : "bg-risk-bg text-risk"
+                          }`}
+                          title={p.recommended ? "Prolazi naše kriterijume" : "Ne prolazi kriterijume — popuna do 5"}
+                        >
+                          {p.tier}
+                        </span>
+                      </p>
                       <p className="text-[11px] text-muted">{p.reasons.join(" · ") || p.tournament}</p>
                     </td>
                     <td className="py-2 px-2">
-                      <span className="font-semibold text-ink text-[13px]">{p.pick}</span>
-                      <span
-                        className={`ml-1.5 text-[10px] rounded px-1.5 py-0.5 font-medium ${
-                          p.tier === "visok" ? "bg-good-bg text-good" : p.tier === "srednji" ? "bg-surface-alt text-ink-soft" : "bg-risk-bg text-risk"
-                        }`}
-                        title={p.recommended ? "Prolazi naše kriterijume" : "Ne prolazi kriterijume — tu je samo da popuni listu do 5"}
+                      <select
+                        value={chosen.id}
+                        onChange={(e) => setChosenMarket((m) => ({ ...m, [p.matchId]: e.target.value as MarketId }))}
+                        className="w-full max-w-[230px] rounded border border-line bg-paper px-2 py-1.5 text-[12px] text-ink focus:outline-none focus:ring-1 focus:ring-accent"
+                        title={`Prolaznost iz ${chosen.sample.toLocaleString("sr-RS")} sličnih mečeva`}
                       >
-                        {p.tier}
-                      </span>
+                        {opts.map((o) => (
+                          <option key={o.id} value={o.id}>
+                            {o.safest ? "★ " : ""}{o.label} — {o.passPct}%
+                          </option>
+                        ))}
+                      </select>
+                      <p className="mt-0.5 text-[10px] text-muted tabular">
+                        istorijska prolaznost <strong className={chosen.passPct >= 80 ? "text-good" : chosen.passPct < 55 ? "text-risk" : ""}>{chosen.passPct}%</strong>
+                        {chosen.safest && " · najsigurniji tip"}
+                      </p>
                     </td>
                     <td className="py-2 px-2 text-right tabular text-[13px] font-semibold text-ink">{Math.round(p.modelProb * 100)}%</td>
-                    <td className="py-2 px-2 text-right tabular text-[13px] text-muted">{p.estOdds.toFixed(2)}</td>
+                    <td className="py-2 px-2 text-right tabular text-[13px] text-muted">{chosen.estOdds.toFixed(2)}</td>
                     <td className="py-2 px-2 text-right tabular text-[13px] font-semibold text-ink">{formatMoney(p.stake, cur)}</td>
-                    <td className="py-2 px-2 text-right tabular text-[13px] text-good">+{formatMoney(p.estProfit, cur)}</td>
+                    <td className="py-2 px-2 text-right tabular text-[13px] text-good">+{formatMoney(profit, cur)}</td>
                     <td className="py-2 pl-2 text-right whitespace-nowrap">
                       <button onClick={() => onAnalyze(p.pick, p.opponent, p.surface)} className="text-[11px] text-accent hover:underline mr-2">analiza</button>
                       {isToday && (
@@ -196,10 +221,10 @@ export default function DailyPlanCalendar({ onAnalyze }: { onAnalyze: (a: string
                           onClick={async () => {
                             await placeBet({
                               matchLabel: `${p.playerA} vs ${p.playerB} (${p.surface})`,
-                              pick: p.pick,
-                              odds: p.estOdds,
+                              pick: chosen.pickText,
+                              odds: chosen.estOdds,
                               stake: p.stake,
-                              modelProb: p.modelProb,
+                              modelProb: chosen.passPct / 100,
                             });
                             setPlaced((x) => ({ ...x, [p.matchId]: true }));
                             await refresh();
@@ -212,7 +237,8 @@ export default function DailyPlanCalendar({ onAnalyze }: { onAnalyze: (a: string
                       )}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -274,7 +300,8 @@ export default function DailyPlanCalendar({ onAnalyze }: { onAnalyze: (a: string
           )}
 
           <p className="mt-3 text-[11px] text-muted">
-            Kvote su <strong>procena</strong> (nemamo live kvote na hostingu) — pravi iznos vidiš kad odigraš i slikaš tiket.
+            Prolaznosti tipova su <strong>stvarne istorijske frekvencije</strong> iz ~9.500 mečeva (ne procene) — kvote jesu procena.
+            Tikete sa tipom „uzima set" / „gemovi" obeležavaš ručno (✓/✗) — automatika ume samo konačan ishod.
             Ulog je ravnomeran po tieru (2% / 1.25% / 0.5% bankrolla), ne Kelly, jer bez prave kvote nema pravog edge-a.
             {recommended.length < picks.length && (
               <> Pickovi označeni kao <strong>„nizak"</strong> ne prolaze naše kriterijume — tu su samo da popune listu do 5.</>
