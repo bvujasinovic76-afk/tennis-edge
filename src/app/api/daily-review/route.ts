@@ -52,8 +52,11 @@ export async function GET(req: NextRequest) {
   const dateStr = req.nextUrl.searchParams.get("date") || belgrade(new Date());
 
   let matches: EnrichedWorldMatch[];
+  let source: "sofascore" | "espn";
   try {
-    matches = await fetchEnrichedWorldDay(dateStr);
+    const r = await fetchEnrichedWorldDay(dateStr);
+    matches = r.matches;
+    source = r.source;
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Izvor nedostupan.", hint: "Dnevna analiza koristi isti izvor rezultata kao svetski pregled — trenutno nedostupan sa ovog servera." },
@@ -128,6 +131,8 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     date: dateStr,
     evaluatedCount: evaluated.length,
+    source,
+    note: source === "espn" ? "Analiza na ESPN rezervi — pokriven samo glavni ATP tur, bez Challengera." : undefined,
     markets,
     combos,
     tournaments,

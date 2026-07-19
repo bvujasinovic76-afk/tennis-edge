@@ -4,12 +4,17 @@ import { fetchEnrichedWorldDay, type EnrichedWorldMatch } from "@/lib/worldEnric
 
 const belgrade = (d: Date) => new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Belgrade" }).format(d);
 
+const ESPN_NOTE = "Prikaz preko ESPN rezerve — samo glavni ATP tur. Challengeri su trenutno nedostupni sa ovog servera (Sofascore blokira hosting).";
+
 export async function GET(req: NextRequest) {
   const dateStr = req.nextUrl.searchParams.get("date") || belgrade(new Date());
 
   let enriched: EnrichedWorldMatch[];
+  let source: "sofascore" | "espn";
   try {
-    enriched = await fetchEnrichedWorldDay(dateStr);
+    const r = await fetchEnrichedWorldDay(dateStr);
+    enriched = r.matches;
+    source = r.source;
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Izvor nedostupan.", hint: "Svetski pregled (Sofascore) radi u lokalnoj verziji — hosting servera je blokiran od strane izvora." },
@@ -32,6 +37,8 @@ export async function GET(req: NextRequest) {
     totalMatches: enriched.length,
     totalTournaments: groups.length,
     live: enriched.filter((m) => m.statusType === "inprogress").length,
+    source,
+    note: source === "espn" ? ESPN_NOTE : undefined,
     groups,
   });
 }

@@ -33,6 +33,26 @@ export function enrichWorld(matches: WorldMatch[]): EnrichedWorldMatch[] {
   });
 }
 
-export async function fetchEnrichedWorldDay(dateStr: string): Promise<EnrichedWorldMatch[]> {
-  return enrichWorld(await fetchWorldDay(dateStr));
+export type WorldDayResult = {
+  matches: EnrichedWorldMatch[];
+  source: "sofascore" | "espn";
+};
+
+/**
+ * Sofascore prvo (pun program: ATP + Challenger); kad je blokiran (Vercel/datacentar),
+ * ESPN rezerva — pokriva samo glavni ATP tur, ali bolje išta nego greška.
+ */
+export async function fetchEnrichedWorldDay(dateStr: string): Promise<WorldDayResult> {
+  try {
+    return { matches: enrichWorld(await fetchWorldDay(dateStr)), source: "sofascore" };
+  } catch (sofaErr) {
+    const { fetchEspnWorldDay } = await import("./espn");
+    try {
+      const espn = await fetchEspnWorldDay(dateStr);
+      if (espn.length === 0) throw new Error("ESPN prazan");
+      return { matches: enrichWorld(espn), source: "espn" };
+    } catch {
+      throw sofaErr; // originalna poruka je korisnija od ESPN greške
+    }
+  }
 }

@@ -22,7 +22,7 @@ type TournamentReview = {
   suits: PlayerFit[];
   suitsNot: PlayerFit[];
 };
-type Resp = { date: string; evaluatedCount: number; markets: MarketAgg[]; combos: ComboRetro[]; tournaments: TournamentReview[]; error?: string; hint?: string };
+type Resp = { date: string; evaluatedCount: number; markets: MarketAgg[]; combos: ComboRetro[]; tournaments: TournamentReview[]; note?: string; error?: string; hint?: string };
 
 const SURFACE_SR: Record<Surface, string> = { Hard: "tvrda", Clay: "šljaka", Grass: "trava" };
 
@@ -64,6 +64,7 @@ export default function DailyReview({ dateStr }: { dateStr: string }) {
         <div className="border-t border-line px-4 py-3 space-y-4">
           {loading && <p className="text-sm text-muted">Analiziram sve mečeve dana…</p>}
           {data?.error && <p className="text-sm text-risk">{data.error}</p>}
+          {data?.note && <p className="text-[12px] rounded-md bg-surface-alt px-3 py-2 text-ink-soft">ⓘ {data.note}</p>}
 
           {/* 1) Koja igra je najviše prolazila */}
           {data && hasRetro && (

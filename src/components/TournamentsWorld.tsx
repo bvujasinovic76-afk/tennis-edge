@@ -21,7 +21,7 @@ type Match = {
   modelHomePct: number | null;
 };
 type Group = { tournament: string; tier: "Grand Slam" | "Masters" | "ATP" | "Challenger"; category: string; matches: Match[] };
-type Resp = { date: string; totalMatches: number; totalTournaments: number; live: number; groups: Group[]; error?: string; hint?: string };
+type Resp = { date: string; totalMatches: number; totalTournaments: number; live: number; groups: Group[]; note?: string; error?: string; hint?: string };
 
 const TIER_STYLE: Record<Group["tier"], string> = {
   "Grand Slam": "bg-accent text-accent-contrast",
@@ -100,6 +100,10 @@ export default function TournamentsWorld({ onAnalyze }: { onAnalyze: (a: string,
           {data.error}
           {data.hint && <p className="mt-1 text-[12px] text-ink-soft">{data.hint}</p>}
         </div>
+      )}
+
+      {data?.note && (
+        <div className="mb-3 rounded-md bg-surface-alt px-4 py-2.5 text-[12px] text-ink-soft">ⓘ {data.note}</div>
       )}
 
       {data && !data.error && <HitStats groups={data.groups} />}

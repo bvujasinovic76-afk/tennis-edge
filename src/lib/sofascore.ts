@@ -121,7 +121,7 @@ export type WorldMatch = FixtureMatch & {
   winner: "home" | "away" | null;
 };
 
-function tierOf(category: "ATP" | "Challenger", tournament: string): WorldMatch["tier"] {
+export function tierOf(category: "ATP" | "Challenger", tournament: string): WorldMatch["tier"] {
   if (category === "Challenger") return "Challenger";
   const t = tournament.toLowerCase();
   if (SLAM_HINTS.some((h) => t.includes(h))) return "Grand Slam";

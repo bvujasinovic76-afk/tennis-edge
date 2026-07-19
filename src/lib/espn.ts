@@ -1,4 +1,4 @@
-import type { FixtureMatch } from "./sofascore";
+import { tierOf, type FixtureMatch, type WorldMatch } from "./sofascore";
 
 // ESPN-ov javni scoreboard — radi sa native fetch-om i iz datacentara (Vercel),
 // za razliku od Sofascore-a. Nema kvote ni ATP rang, ali daje live/upcoming/finished.
@@ -53,7 +53,7 @@ export async function fetchEspnFixtures(): Promise<{ live: FixtureMatch[]; upcom
       const groups = ev.groupings?.length ? ev.groupings : [{ grouping: { displayName: "Singles" }, competitions: ev.competitions ?? [] }];
       for (const g of groups) {
         const label = g.grouping?.displayName ?? "";
-        if (!/men's singles|^singles$/i.test(label)) continue; // ATP pojedinačno
+        if (!/^(men's singles|singles)$/i.test(label.trim())) continue; // ATP pojedinačno
         for (const c of g.competitions ?? []) {
           const [h, a] = c.competitors ?? [];
           const homeName = h?.athlete?.displayName;
@@ -83,6 +83,62 @@ export async function fetchEspnFixtures(): Promise<{ live: FixtureMatch[]; upcom
 
     upcoming.sort((x, y) => new Date(x.startTime).getTime() - new Date(y.startTime).getTime());
     return { live, upcoming: upcoming.slice(0, 60), finished };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/**
+ * ESPN rezerva za svetski pregled kad je Sofascore blokiran (Vercel): svi mečevi
+ * dana sa rezultatima po setovima i pobednikom. Pokriva SAMO glavni ATP tur —
+ * ESPN nema Challenger scoreboard, pa je online prikaz uži nego lokalni.
+ */
+const belgradeDay = (iso: string) => new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Belgrade" }).format(new Date(iso));
+
+export async function fetchEspnWorldDay(dateStr: string): Promise<WorldMatch[]> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
+  try {
+    const res = await fetch(`${SCOREBOARD}?dates=${dateStr.replace(/-/g, "")}`, {
+      signal: controller.signal,
+      headers: { Accept: "application/json" },
+    });
+    if (!res.ok) throw new Error(`ESPN HTTP ${res.status}`);
+    const data = (await res.json()) as { events?: EspnEvent[] };
+
+    const out: WorldMatch[] = [];
+    for (const ev of data.events ?? []) {
+      const groups = ev.groupings?.length ? ev.groupings : [{ grouping: { displayName: "Singles" }, competitions: ev.competitions ?? [] }];
+      for (const g of groups) {
+        const label = g.grouping?.displayName ?? "";
+        if (!/^(men's singles|singles)$/i.test(label.trim())) continue;
+        for (const c of g.competitions ?? []) {
+          const [h, a] = c.competitors ?? [];
+          const homeName = h?.athlete?.displayName;
+          const awayName = a?.athlete?.displayName;
+          if (!homeName || !awayName) continue;
+          if (belgradeDay(c.date) !== dateStr) continue; // ESPN vraća ceo raspon turnira, ne samo taj dan
+          const state = c.status?.type?.state ?? "pre";
+          const completed = c.status?.type?.completed === true;
+          out.push({
+            id: Number(c.id) || Math.abs(hash(`${ev.name}${c.date}${homeName}`)),
+            tournament: ev.name,
+            round: c.round?.displayName ?? "",
+            status: c.status?.type?.description ?? "",
+            statusType: state === "in" ? "inprogress" : completed ? "finished" : state === "post" ? "finished" : "notstarted",
+            startTime: new Date(c.date).toISOString(),
+            home: { name: homeName, ranking: null },
+            away: { name: awayName, ranking: null },
+            score: state !== "pre" ? { home: lineScores(h), away: lineScores(a) } : undefined,
+            category: "ATP",
+            tier: tierOf("ATP", ev.name),
+            winner: completed ? (h?.winner ? "home" : a?.winner ? "away" : null) : null,
+          });
+        }
+      }
+    }
+    out.sort((x, y) => new Date(x.startTime).getTime() - new Date(y.startTime).getTime());
+    return out;
   } finally {
     clearTimeout(timeout);
   }
