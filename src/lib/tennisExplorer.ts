@@ -60,7 +60,7 @@ export async function fetchTeChallengerDay(dateStr: string): Promise<WorldMatch[
   const seen = new Set<number>();
 
   let tournament: { name: string; isChallenger: boolean } | null = null;
-  let pending: { id: number; time: string; home: Half } | null = null;
+  let pending: { id: number; time: string; home: Half; odds: { home: number; away: number } | null } | null = null;
 
   for (const row of rows) {
     const seg = row.slice(0, row.indexOf("</tr>") === -1 ? undefined : row.indexOf("</tr>"));
@@ -86,11 +86,14 @@ export async function fetchTeChallengerDay(dateStr: string): Promise<WorldMatch[
       const half = parseHalf(seg);
       const time = seg.match(/class="first time"[^>]*>\s*([\d]{1,2}:[\d]{2})/)?.[1] ?? "12:00";
       const detailId = seg.match(/match-detail\/\?id=(\d+)/)?.[1];
-      if (half && detailId) pending = { id: Number(detailId), time, home: half };
+      // Kvote: kolone H i A u prvom redu (class "coursew"/"course"), redom home pa away.
+      const oddsVals = [...seg.matchAll(/class="course(?:w)?"[^>]*>\s*([\d.]+)/g)].map((m) => Number(m[1]));
+      const odds = oddsVals.length >= 2 && oddsVals[0] > 1 && oddsVals[1] > 1 ? { home: oddsVals[0], away: oddsVals[1] } : null;
+      if (half && detailId) pending = { id: Number(detailId), time, home: half, odds };
       else pending = null;
     } else if (pending) {
       const away = parseHalf(seg);
-      const { id, time, home } = pending;
+      const { id, time, home, odds } = pending;
       pending = null;
       if (!away || seen.has(id)) continue;
       if (home.name.includes("/") || away.name.includes("/")) continue; // dubl
@@ -119,6 +122,7 @@ export async function fetchTeChallengerDay(dateStr: string): Promise<WorldMatch[
         category: "Challenger",
         tier: "Challenger",
         winner,
+        odds,
       });
     }
   }

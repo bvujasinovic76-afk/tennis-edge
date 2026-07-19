@@ -108,12 +108,15 @@ export type MatchPicks = {
 };
 
 export function threePicks(m: EnrichedWorldMatch): MatchPicks | null {
-  if (m.modelHomePct == null || !m.homeElo || !m.awayElo) return null;
+  if (m.modelHomePct == null) return null;
   const pHome = m.modelHomePct / 100;
   const favIsHome = pHome >= 0.5;
   const pFav = favIsHome ? pHome : 1 - pHome;
-  const favName = favIsHome ? m.homeElo : m.awayElo;
-  const dogName = favIsHome ? m.awayElo : m.homeElo;
+  // Kad igrač nije u Elo bazi (šansa iz kvota), koristimo ime kako ga izvor piše.
+  const homeName = m.homeElo ?? m.home.name;
+  const awayName = m.awayElo ?? m.away.name;
+  const favName = favIsHome ? homeName : awayName;
+  const dogName = favIsHome ? awayName : homeName;
 
   const options = marketsForMatch(pFav, favName, dogName);
   const byId = new Map(options.map((o) => [o.id, o]));

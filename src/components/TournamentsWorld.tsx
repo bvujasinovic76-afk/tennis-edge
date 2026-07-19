@@ -19,6 +19,7 @@ type Match = {
   homeElo: string | null;
   awayElo: string | null;
   modelHomePct: number | null;
+  probSource?: "elo" | "kvote" | null;
   picks?: { win: Pick; set: Pick; games: Pick } | null;
 };
 type Pick = { text: string; passPct: number; estOdds: number; hit: boolean | null };
@@ -147,7 +148,7 @@ export default function TournamentsWorld({ onAnalyze }: { onAnalyze: (a: string,
                           </span>
                           {(live || done) && <span className="tabular text-[12px] text-ink-soft">{setsText(m)}{live && m.score?.home.point != null ? ` · ${m.score.home.point}:${m.score?.away.point}` : ""}</span>}
                           {m.modelHomePct != null && !done && (
-                            <span className="tabular text-[11px] text-muted">model {m.modelHomePct}% / {100 - m.modelHomePct}%</span>
+                            <span className="tabular text-[11px] text-muted">{m.probSource === "kvote" ? "po kvotama" : "model"} {m.modelHomePct}% / {100 - m.modelHomePct}%</span>
                           )}
                           {m.round && <span className="text-[11px] text-muted hidden sm:inline">{m.round}</span>}
                           {m.picks && (
@@ -174,8 +175,9 @@ export default function TournamentsWorld({ onAnalyze }: { onAnalyze: (a: string,
       )}
 
       <p className="mt-3 text-[11px] text-muted">
-        Izvor: Sofascore (sve kategorije — ATP, Masters, Challenger). Model % se prikazuje samo za igrače koje imamo u
-        Elo bazi (uglavnom ATP nivo); za većinu challenger igrača nemamo istoriju pa procenat izostaje. Osvežava se na 60s.
+        Predlozi: za igrače iz naše Elo baze šansa dolazi iz modela; za ostale (većina challenger igrača) izvodi se iz
+        kvota kladionica sa skinutom maržom — tada piše „po kvotama". Krugovi pogodaka broje samo mečeve gde je naš model
+        birao. Osvežava se na 60s.
       </p>
     </div>
   );
@@ -196,7 +198,8 @@ function HitStats({ groups }: { groups: Group[] }) {
     let hits = 0;
     let total = 0;
     for (const m of g.matches) {
-      if (m.statusType !== "finished" || m.winner == null || m.modelHomePct == null) continue;
+      // Samo mečevi gde je NAŠ model birao (oba igrača u bazi) — pogoci po kvotama nisu naša zasluga.
+      if (m.statusType !== "finished" || m.winner == null || m.modelHomePct == null || !m.homeElo || !m.awayElo) continue;
       const modelPickedHome = m.modelHomePct >= 50;
       const hit = (modelPickedHome && m.winner === "home") || (!modelPickedHome && m.winner === "away");
       total += 1;

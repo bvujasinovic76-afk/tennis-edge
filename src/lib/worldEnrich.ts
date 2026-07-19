@@ -1,7 +1,7 @@
 import { fetchWorldDay, type WorldMatch } from "./sofascore";
 import { buildPlayerIndex, matchAnyName } from "./nameMatch";
 import { players } from "./ratings";
-import { blendedRating, expectedProb, type Surface } from "./elo";
+import { blendedRating, devig, expectedProb, type Surface } from "./elo";
 
 /** Gruba procena podloge iz imena turnira — dovoljno za sezonski raspored. */
 export function surfaceGuess(tournament: string): Surface {
@@ -16,9 +16,10 @@ export type EnrichedWorldMatch = WorldMatch & {
   homeElo: string | null; // naše ime iz baze ako je igrač prepoznat
   awayElo: string | null;
   modelHomePct: number | null;
+  probSource: "elo" | "kvote" | null; // odakle je šansa: naš model ili kvote kladionica (de-vig)
 };
 
-/** Dodaje podlogu, prepoznata imena iz Elo baze i model % na sirove mečeve. */
+/** Dodaje podlogu, prepoznata imena iz Elo baze i šansu (model, ili kvote kad igrača nema u bazi). */
 export function enrichWorld(matches: WorldMatch[]): EnrichedWorldMatch[] {
   const index = buildPlayerIndex(players);
   return matches.map((m) => {
@@ -26,11 +27,41 @@ export function enrichWorld(matches: WorldMatch[]): EnrichedWorldMatch[] {
     const a = matchAnyName(m.home.name, index);
     const b = matchAnyName(m.away.name, index);
     let modelHomePct: number | null = null;
+    let probSource: EnrichedWorldMatch["probSource"] = null;
     if (a && b) {
       modelHomePct = Math.round(expectedProb(blendedRating(a, surface), blendedRating(b, surface)) * 100);
+      probSource = "elo";
+    } else if (m.odds && m.odds.home > 1 && m.odds.away > 1) {
+      modelHomePct = Math.round(devig(m.odds.home, m.odds.away).pA * 100);
+      probSource = "kvote";
     }
-    return { ...m, surface, homeElo: a?.name ?? null, awayElo: b?.name ?? null, modelHomePct };
+    return { ...m, surface, homeElo: a?.name ?? null, awayElo: b?.name ?? null, modelHomePct, probSource };
   });
+}
+
+/** Normalizovano prezime ("Maximus Hulme" i "Hulme M." -> "hulme"). */
+function lastNameKey(n: string): string {
+  return n.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase()
+    .replace(/(\s+[a-z]\.)+$/, "")
+    .trim().split(/\s+/).pop() ?? "";
+}
+
+/** Prenese TennisExplorer kvote na Sofascore mečeve (lokalna putanja) da i tamo bude predloga. */
+function mergeTeOdds(matches: WorldMatch[], te: WorldMatch[]): void {
+  const byKey = new Map<string, { home: number; away: number; homeLast: string }>();
+  for (const t of te) {
+    if (!t.odds) continue;
+    const key = [lastNameKey(t.home.name), lastNameKey(t.away.name)].sort().join("|");
+    byKey.set(key, { ...t.odds, homeLast: lastNameKey(t.home.name) });
+  }
+  for (const m of matches) {
+    if (m.odds) continue;
+    const key = [lastNameKey(m.home.name), lastNameKey(m.away.name)].sort().join("|");
+    const hit = byKey.get(key);
+    if (!hit) continue;
+    // Isti par može biti obrnut između izvora — poravnaj strane po prezimenu domaćeg.
+    m.odds = lastNameKey(m.home.name) === hit.homeLast ? { home: hit.home, away: hit.away } : { home: hit.away, away: hit.home };
+  }
 }
 
 export type WorldDayResult = {
@@ -44,7 +75,13 @@ export type WorldDayResult = {
  */
 export async function fetchEnrichedWorldDay(dateStr: string): Promise<WorldDayResult> {
   try {
-    return { matches: enrichWorld(await fetchWorldDay(dateStr)), source: "sofascore" };
+    const sofa = await fetchWorldDay(dateStr);
+    // TE kvote dopunjuju i lokalni prikaz (predlozi za igrače van Elo baze); sme da padne.
+    try {
+      const { fetchTeChallengerDay } = await import("./tennisExplorer");
+      mergeTeOdds(sofa, await fetchTeChallengerDay(dateStr));
+    } catch {}
+    return { matches: enrichWorld(sofa), source: "sofascore" };
   } catch (sofaErr) {
     const [{ fetchEspnWorldDay }, { fetchTeChallengerDay }] = await Promise.all([import("./espn"), import("./tennisExplorer")]);
     const [espnRes, teRes] = await Promise.allSettled([fetchEspnWorldDay(dateStr), fetchTeChallengerDay(dateStr)]);

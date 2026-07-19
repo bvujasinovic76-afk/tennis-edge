@@ -119,6 +119,7 @@ export type WorldMatch = FixtureMatch & {
   category: "ATP" | "Challenger";
   tier: "Grand Slam" | "Masters" | "ATP" | "Challenger";
   winner: "home" | "away" | null;
+  odds?: { home: number; away: number } | null; // prave kvote kad ih izvor daje (TennisExplorer)
 };
 
 export function tierOf(category: "ATP" | "Challenger", tournament: string): WorldMatch["tier"] {
