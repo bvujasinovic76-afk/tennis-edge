@@ -37,6 +37,23 @@ export function buildPlayerIndex(players: Player[]): PlayerIndex {
   return { byLastAndInitial, byLastOnly };
 }
 
+/** Matches a "Last F." (TennisExplorer-style, same format as our DB) name directly. */
+export function matchShortName(shortName: string, index: PlayerIndex): Player | null {
+  const name = shortName.trim();
+  if (!/\s[A-Z]\.(\s[A-Z]\.)*$/.test(name)) return null; // nije kratki format
+  const last = lastNameOf(name);
+  const initial = firstInitialOf(name);
+  const exact = index.byLastAndInitial.get(`${last}|${initial}`);
+  if (exact) return exact;
+  const candidates = index.byLastOnly.get(last);
+  return candidates && candidates.length === 1 ? candidates[0] : null;
+}
+
+/** Proba oba formata: "First Last" (Sofascore/ESPN) pa "Last F." (TennisExplorer). */
+export function matchAnyName(name: string, index: PlayerIndex): Player | null {
+  return matchShortName(name, index) ?? matchFullName(name, index);
+}
+
 /** Matches a "First Last" (Sofascore/ESPN-style) name against our "Last F." rating database. */
 export function matchFullName(fullName: string, index: PlayerIndex): Player | null {
   const name = fullName.trim();

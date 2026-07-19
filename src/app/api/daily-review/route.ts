@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
   const dateStr = req.nextUrl.searchParams.get("date") || belgrade(new Date());
 
   let matches: EnrichedWorldMatch[];
-  let source: "sofascore" | "espn";
+  let source: "sofascore" | "espn" | "espn+te" | "te";
   try {
     const r = await fetchEnrichedWorldDay(dateStr);
     matches = r.matches;
@@ -132,7 +132,10 @@ export async function GET(req: NextRequest) {
     date: dateStr,
     evaluatedCount: evaluated.length,
     source,
-    note: source === "espn" ? "Analiza na ESPN rezervi — pokriven samo glavni ATP tur, bez Challengera." : undefined,
+    note: source === "espn" ? "Analiza na ESPN rezervi — pokriven samo glavni ATP tur, bez Challengera."
+      : source === "espn+te" ? "Analiza na online rezervi (ESPN + TennisExplorer za Challengere)."
+      : source === "te" ? "Analiza samo na Challenger mečevima (TennisExplorer) — ATP izvor nedostupan."
+      : undefined,
     markets,
     combos,
     tournaments,

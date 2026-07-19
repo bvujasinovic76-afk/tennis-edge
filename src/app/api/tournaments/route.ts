@@ -5,13 +5,18 @@ import { threePicks, type MatchPicks } from "@/lib/dailyReview";
 
 const belgrade = (d: Date) => new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Belgrade" }).format(d);
 
-const ESPN_NOTE = "Prikaz preko ESPN rezerve — samo glavni ATP tur. Challengeri su trenutno nedostupni sa ovog servera (Sofascore blokira hosting).";
+const SOURCE_NOTE: Record<string, string | undefined> = {
+  sofascore: undefined,
+  espn: "Prikaz preko ESPN rezerve — samo glavni ATP tur. Challengeri su trenutno nedostupni sa ovog servera.",
+  "espn+te": "Online rezerva: ATP preko ESPN-a + Challengeri preko TennisExplorera (Sofascore blokira hosting). Rang i pojedini detalji mogu izostati.",
+  te: "Prikaz preko TennisExplorera — samo Challengeri, ATP izvor je trenutno nedostupan.",
+};
 
 export async function GET(req: NextRequest) {
   const dateStr = req.nextUrl.searchParams.get("date") || belgrade(new Date());
 
   let enriched: EnrichedWorldMatch[];
-  let source: "sofascore" | "espn";
+  let source: "sofascore" | "espn" | "espn+te" | "te";
   try {
     const r = await fetchEnrichedWorldDay(dateStr);
     enriched = r.matches;
@@ -42,7 +47,7 @@ export async function GET(req: NextRequest) {
     totalTournaments: groups.length,
     live: enriched.filter((m) => m.statusType === "inprogress").length,
     source,
-    note: source === "espn" ? ESPN_NOTE : undefined,
+    note: SOURCE_NOTE[source],
     groups,
   });
 }
