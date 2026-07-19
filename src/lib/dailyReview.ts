@@ -97,6 +97,56 @@ export function suggestionFor(m: EnrichedWorldMatch): Suggestion | null {
   return { text: safe.label, passPct: safe.passPct, estOdds: safe.estOdds, hit };
 }
 
+/**
+ * Tri ključne igre za meč — 1/2, set (favorit ili autsajder uzima bar set, šta je izglednije)
+ * i ukupno gemova (preko/ispod 21.5). Za završene mečeve svaki tip nosi ✓/✗.
+ */
+export type MatchPicks = {
+  win: Suggestion;
+  set: Suggestion;
+  games: Suggestion;
+};
+
+export function threePicks(m: EnrichedWorldMatch): MatchPicks | null {
+  if (m.modelHomePct == null || !m.homeElo || !m.awayElo) return null;
+  const pHome = m.modelHomePct / 100;
+  const favIsHome = pHome >= 0.5;
+  const pFav = favIsHome ? pHome : 1 - pHome;
+  const favName = favIsHome ? m.homeElo : m.awayElo;
+  const dogName = favIsHome ? m.awayElo : m.homeElo;
+
+  const options = marketsForMatch(pFav, favName, dogName);
+  const byId = new Map(options.map((o) => [o.id, o]));
+  const winOpt = byId.get("win")!;
+  const favset = byId.get("favset")!;
+  const dogset = byId.get("dogset")!;
+  const over = byId.get("over215")!;
+  const under = byId.get("under215")!;
+  const setOpt = favset.passPct >= dogset.passPct ? favset : dogset;
+  const gamesOpt = over.passPct >= under.passPct ? over : under;
+
+  const finished = m.statusType === "finished" && m.winner != null && !RETIRED_RE.test(m.status);
+  const sets = finished ? readSets(m, favIsHome) : null;
+
+  const hitOf = (id: MarketId): boolean | null => {
+    if (!finished) return null;
+    if (id === "win") return (m.winner === "home") === favIsHome;
+    if (!sets) return null;
+    return id === "favset" ? sets.favSets >= 1
+      : id === "dogset" ? sets.dogSets >= 1
+      : id === "over215" ? sets.games > 21.5
+      : sets.games < 21.5;
+  };
+  const toSug = (o: { id: MarketId; label: string; passPct: number; estOdds: number }): Suggestion => ({
+    text: o.label,
+    passPct: o.passPct,
+    estOdds: o.estOdds,
+    hit: hitOf(o.id),
+  });
+
+  return { win: toSug(winOpt), set: toSug(setOpt), games: toSug(gamesOpt) };
+}
+
 /** Evaluira sve završene mečeve dana na kojima je model uopšte birao. */
 export function evaluateDay(matches: EnrichedWorldMatch[]): EvaluatedMatch[] {
   const out: EvaluatedMatch[] = [];

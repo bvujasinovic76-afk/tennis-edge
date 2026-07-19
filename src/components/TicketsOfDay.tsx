@@ -6,7 +6,7 @@ import { useBankroll, formatMoney } from "./BankrollContext";
 
 type Leg = { matchId: number; match: string; tournament: string; startTime: string; surface: Surface; pick: string; opponent: string; prob: number; odds: number };
 type Ticket = {
-  kind: "duplas" | "rizican" | "pet" | "setovi";
+  kind: "siguran" | "srednji" | "rizican";
   title: string;
   legs: Leg[];
   totalOdds: number;
@@ -43,11 +43,12 @@ export default function TicketsOfDay({ onAnalyze }: { onAnalyze: (a: string, b: 
   return (
     <div className="rounded-xl border border-line bg-surface shadow-sm p-5">
       <h3 className="font-display font-bold text-lg text-ink mb-1" style={{ fontStretch: "85%" }}>
-        🎟️ Tiket dana — kombinacije
+        🎟️ Tri tiketa za danas
       </h3>
       <p className="text-sm text-muted mb-4 max-w-[70ch]">
-        Predlozi: <strong>sigurniji sa setovima</strong> (istorijski najprolazniji), <strong>duplaš</strong> (~2.0),{" "}<strong>rizičan</strong> i <strong>5 parova</strong>. Uz svaki piše <strong>prava šansa da prođe</strong> — jer kombinacija je
-        jedan tiket: padne li jedan par, pada sve.
+        <strong>Siguran</strong> (tiket dana, 1–2 para), <strong>srednji</strong> (5–6 parova, miks igara) i{" "}
+        <strong>rizičan</strong> (velika kvota). Uz svaki stoji <strong>predlog uloga</strong> prema tvom bankrollu i{" "}
+        <strong>prava šansa da prođe</strong> — jer kombinacija je jedan tiket: padne li jedan par, pada sve.
       </p>
 
       {loading && <p className="text-sm text-muted">Sastavljam tikete…</p>}
@@ -64,8 +65,8 @@ export default function TicketsOfDay({ onAnalyze }: { onAnalyze: (a: string, b: 
           const stakeVal = stakes[key] ?? String(t.stake);
           const stakeNum = parseFloat(stakeVal) || 0;
           const ret = Math.round(stakeNum * t.totalOdds);
-          const isRisky = t.kind === "rizican" || t.kind === "pet";
-          const isSafe = t.kind === "setovi";
+          const isRisky = t.kind === "rizican";
+          const isSafe = t.kind === "siguran";
           return (
             <div key={key} className={`rounded-lg border p-4 ${isRisky ? "border-risk-line bg-risk-bg/30" : isSafe ? "border-good bg-good-bg/20" : "border-accent/50 bg-paper"}`}>
               <div className="flex items-center justify-between mb-2">
@@ -113,7 +114,7 @@ export default function TicketsOfDay({ onAnalyze }: { onAnalyze: (a: string, b: 
 
               <div className="flex flex-wrap items-end gap-2">
                 <label className="block">
-                  <span className="block text-[10px] uppercase tracking-wide text-muted mb-1">Ulog ({cur})</span>
+                  <span className="block text-[10px] uppercase tracking-wide text-muted mb-1">Predlog uloga ({cur})</span>
                   <input
                     type="number"
                     value={stakeVal}
@@ -127,7 +128,7 @@ export default function TicketsOfDay({ onAnalyze }: { onAnalyze: (a: string, b: 
                 <button
                   onClick={async () => {
                     await placeBet({
-                      matchLabel: `Kombinacija ${t.legs.length} para · ${t.kind === "duplas" ? "duplaš" : t.kind === "pet" ? "5 parova" : t.kind === "setovi" ? "setovi" : "rizičan"}`,
+                      matchLabel: `Kombinacija ${t.legs.length} para · ${t.kind === "siguran" ? "siguran" : t.kind === "srednji" ? "srednji" : "rizičan"}`,
                       pick: t.legs.map((l) => l.pick).join(" + "),
                       odds: t.totalOdds,
                       stake: stakeNum,

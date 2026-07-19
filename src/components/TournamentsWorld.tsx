@@ -19,8 +19,9 @@ type Match = {
   homeElo: string | null;
   awayElo: string | null;
   modelHomePct: number | null;
-  suggestion?: { text: string; passPct: number; estOdds: number; hit: boolean | null } | null;
+  picks?: { win: Pick; set: Pick; games: Pick } | null;
 };
+type Pick = { text: string; passPct: number; estOdds: number; hit: boolean | null };
 type Group = { tournament: string; tier: "Grand Slam" | "Masters" | "ATP" | "Challenger"; category: string; matches: Match[] };
 type Resp = { date: string; totalMatches: number; totalTournaments: number; live: number; groups: Group[]; note?: string; error?: string; hint?: string };
 
@@ -149,12 +150,11 @@ export default function TournamentsWorld({ onAnalyze }: { onAnalyze: (a: string,
                             <span className="tabular text-[11px] text-muted">model {m.modelHomePct}% / {100 - m.modelHomePct}%</span>
                           )}
                           {m.round && <span className="text-[11px] text-muted hidden sm:inline">{m.round}</span>}
-                          {m.suggestion && (
-                            <span className={`w-full sm:w-auto text-[11px] rounded px-1.5 py-0.5 ${
-                              m.suggestion.hit === true ? "bg-good-bg text-good" : m.suggestion.hit === false ? "bg-risk-bg text-risk" : "bg-surface-alt text-ink-soft"
-                            }`}>
-                              {m.suggestion.hit === true ? "✓ " : m.suggestion.hit === false ? "✗ " : "💡 "}
-                              predlog: {m.suggestion.text} <span className="tabular">({m.suggestion.passPct}%)</span>
+                          {m.picks && (
+                            <span className="w-full flex flex-wrap gap-1.5 text-[11px]">
+                              <PickChip label="1/2" p={m.picks.win} />
+                              <PickChip label="SET" p={m.picks.set} />
+                              <PickChip label="GEM" p={m.picks.games} />
                             </span>
                           )}
                           {known && !done && (
@@ -242,6 +242,18 @@ function HitStats({ groups }: { groups: Group[] }) {
         „Pogođeno" = favorit po našem Elo modelu je stvarno pobedio. Broje se samo mečevi gde su oba igrača u našoj bazi.
       </p>
     </div>
+  );
+}
+
+/** Čip jedne igre: 1/2, SET ili GEM — sa procentom šanse i ✓/✗ kad je meč gotov. */
+function PickChip({ label, p }: { label: string; p: Pick }) {
+  const tone = p.hit === true ? "bg-good-bg text-good" : p.hit === false ? "bg-risk-bg text-risk" : "bg-surface-alt text-ink-soft";
+  return (
+    <span className={`rounded px-1.5 py-0.5 ${tone}`}>
+      {p.hit === true ? "✓" : p.hit === false ? "✗" : ""}
+      <strong className="mr-1">{p.hit == null ? `${label}:` : ` ${label}:`}</strong>
+      {p.text} <span className="tabular">({Math.round(p.passPct)}% · ~{p.estOdds.toFixed(2)})</span>
+    </span>
   );
 }
 

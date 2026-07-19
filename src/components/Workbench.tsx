@@ -23,12 +23,12 @@ import PlayerDirectory from "./PlayerDirectory";
 
 /**
  * Sve u 5 glavnih tabova da stranica ne bude beskonačan skrol:
- * Danas (listić) · Tiketi (kombinacije/skener/istorija) · Chat · Uživo (svet) · Alati (dubinska analiza).
+ * Početna (svi turniri + 3 igre po meču + 3 tiketa) · Plan (listić) · Tiketi (skener/istorija) · Chat · Alati.
  */
 export default function Workbench({ players }: { players: Player[] }) {
   const [pick, setPick] = useState<{ a: string; b: string; surface: Surface } | null>(null);
   const [pickKey, setPickKey] = useState(0);
-  const [mainTab, setMainTab] = useState("danas");
+  const [mainTab, setMainTab] = useState("pocetna");
   const [toolTab, setToolTab] = useState("analiza");
 
   function handlePick(a: string, b: string, surface: Surface) {
@@ -51,8 +51,18 @@ export default function Workbench({ players }: { players: Player[] }) {
           initial={mainTab}
           tabs={[
             {
+              id: "pocetna",
+              label: "🏠 Početna",
+              content: (
+                <div className="space-y-5">
+                  <TournamentsWorld onAnalyze={handlePick} />
+                  <TicketsOfDay onAnalyze={handlePick} />
+                </div>
+              ),
+            },
+            {
               id: "danas",
-              label: "📋 Danas",
+              label: "📋 Plan",
               content: <DailyPlanCalendar onAnalyze={handlePick} />,
             },
             {
@@ -60,7 +70,6 @@ export default function Workbench({ players }: { players: Player[] }) {
               label: "🎟️ Tiketi",
               content: (
                 <div className="space-y-5">
-                  <TicketsOfDay onAnalyze={handlePick} />
                   <TicketScan />
                   <BankrollPanel />
                 </div>
@@ -70,11 +79,6 @@ export default function Workbench({ players }: { players: Player[] }) {
               id: "chat",
               label: "💬 Chat",
               content: <ChatAssistant />,
-            },
-            {
-              id: "uzivo",
-              label: "🌍 Uživo",
-              content: <TournamentsWorld onAnalyze={handlePick} />,
             },
             {
               id: "alati",
