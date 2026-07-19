@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { Surface } from "@/lib/elo";
+import DailyReview from "./DailyReview";
 
 type Score = { current?: number; display?: number; period1?: number; period2?: number; period3?: number; point?: string };
 type Match = {
@@ -102,6 +103,8 @@ export default function TournamentsWorld({ onAnalyze }: { onAnalyze: (a: string,
       )}
 
       {data && !data.error && <HitStats groups={data.groups} />}
+
+      {data && !data.error && <DailyReview dateStr={dateStr} />}
 
       {data && !data.error && (
         <div className="space-y-2.5">
