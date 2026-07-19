@@ -19,6 +19,7 @@ type Match = {
   homeElo: string | null;
   awayElo: string | null;
   modelHomePct: number | null;
+  suggestion?: { text: string; passPct: number; estOdds: number; hit: boolean | null } | null;
 };
 type Group = { tournament: string; tier: "Grand Slam" | "Masters" | "ATP" | "Challenger"; category: string; matches: Match[] };
 type Resp = { date: string; totalMatches: number; totalTournaments: number; live: number; groups: Group[]; note?: string; error?: string; hint?: string };
@@ -148,6 +149,14 @@ export default function TournamentsWorld({ onAnalyze }: { onAnalyze: (a: string,
                             <span className="tabular text-[11px] text-muted">model {m.modelHomePct}% / {100 - m.modelHomePct}%</span>
                           )}
                           {m.round && <span className="text-[11px] text-muted hidden sm:inline">{m.round}</span>}
+                          {m.suggestion && (
+                            <span className={`w-full sm:w-auto text-[11px] rounded px-1.5 py-0.5 ${
+                              m.suggestion.hit === true ? "bg-good-bg text-good" : m.suggestion.hit === false ? "bg-risk-bg text-risk" : "bg-surface-alt text-ink-soft"
+                            }`}>
+                              {m.suggestion.hit === true ? "✓ " : m.suggestion.hit === false ? "✗ " : "💡 "}
+                              predlog: {m.suggestion.text} <span className="tabular">({m.suggestion.passPct}%)</span>
+                            </span>
+                          )}
                           {known && !done && (
                             <button onClick={() => onAnalyze(m.homeElo!, m.awayElo!, m.surface)} className="ml-auto text-[11px] text-accent hover:underline shrink-0">
                               analiza

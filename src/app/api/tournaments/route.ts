@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { WorldMatch } from "@/lib/sofascore";
 import { fetchEnrichedWorldDay, type EnrichedWorldMatch } from "@/lib/worldEnrich";
+import { suggestionFor, type Suggestion } from "@/lib/dailyReview";
 
 const belgrade = (d: Date) => new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Belgrade" }).format(d);
 
@@ -22,10 +23,13 @@ export async function GET(req: NextRequest) {
     );
   }
 
+  // Uz svaki meč i predlog modela (najsigurniji tip) — sa ✓/✗ kad je meč gotov.
+  const withSuggestion: (EnrichedWorldMatch & { suggestion: Suggestion | null })[] = enriched.map((m) => ({ ...m, suggestion: suggestionFor(m) }));
+
   // Grupisanje po turniru — Grand Slam/Masters prvi, pa ATP, pa Challengeri.
   const order: Record<string, number> = { "Grand Slam": 0, Masters: 1, ATP: 2, Challenger: 3 };
-  const byTournament = new Map<string, { tournament: string; tier: WorldMatch["tier"]; category: string; matches: EnrichedWorldMatch[] }>();
-  for (const m of enriched) {
+  const byTournament = new Map<string, { tournament: string; tier: WorldMatch["tier"]; category: string; matches: (EnrichedWorldMatch & { suggestion: Suggestion | null })[] }>();
+  for (const m of withSuggestion) {
     const g = byTournament.get(m.tournament) ?? { tournament: m.tournament, tier: m.tier, category: m.category, matches: [] };
     g.matches.push(m);
     byTournament.set(m.tournament, g);

@@ -1,5 +1,5 @@
 import type { Surface } from "./elo";
-import { marketsForMatch, type MarketId } from "./markets";
+import { marketsForMatch, safestMarket, type MarketId } from "./markets";
 import type { EnrichedWorldMatch } from "./worldEnrich";
 
 /**
@@ -65,6 +65,36 @@ function readSets(m: EnrichedWorldMatch, favIsHome: boolean) {
     else dogSets += 1;
   }
   return sets >= 2 ? { favSets, dogSets, games, sets } : null;
+}
+
+/** Predlog za jedan meč (najsigurniji tip) + da li je prošao ako je meč gotov. */
+export type Suggestion = { text: string; passPct: number; estOdds: number; hit: boolean | null };
+
+export function suggestionFor(m: EnrichedWorldMatch): Suggestion | null {
+  if (m.modelHomePct == null || !m.homeElo || !m.awayElo) return null;
+  const pHome = m.modelHomePct / 100;
+  const favIsHome = pHome >= 0.5;
+  const pFav = favIsHome ? pHome : 1 - pHome;
+  const favName = favIsHome ? m.homeElo : m.awayElo;
+  const dogName = favIsHome ? m.awayElo : m.homeElo;
+  const safe = safestMarket(pFav, favName, dogName);
+
+  let hit: boolean | null = null;
+  if (m.statusType === "finished" && m.winner != null && !RETIRED_RE.test(m.status)) {
+    if (safe.id === "win") {
+      hit = (m.winner === "home") === favIsHome;
+    } else {
+      const sets = readSets(m, favIsHome);
+      if (sets) {
+        hit =
+          safe.id === "favset" ? sets.favSets >= 1
+          : safe.id === "dogset" ? sets.dogSets >= 1
+          : safe.id === "over215" ? sets.games > 21.5
+          : sets.games < 21.5;
+      }
+    }
+  }
+  return { text: safe.label, passPct: safe.passPct, estOdds: safe.estOdds, hit };
 }
 
 /** Evaluira sve završene mečeve dana na kojima je model uopšte birao. */
